@@ -1,15 +1,14 @@
 import os
 from typing import Annotated, List, TypedDict
-
 from dotenv import load_dotenv
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 from langgraph.checkpoint.memory import InMemorySaver
-
 from langchain_core.messages import BaseMessage, HumanMessage
 from langchain_community.document_loaders import CSVLoader
 from langchain_huggingface import ChatHuggingFace, HuggingFaceEndpoint
 
+from graphs.analytics_graph import ChatState, Analytic_node
 # --------------------------------------------------
 # ENV SETUP
 # --------------------------------------------------
@@ -49,49 +48,24 @@ class ChatState(TypedDict):
 # --------------------------------------------------
 # CHAT NODE
 # --------------------------------------------------
-def chat_node(state: ChatState):
-    finance_data = state["financeSheet"]
-
-    # limit context size
-    context = "\n".join([doc.page_content for doc in finance_data[:20]])
-
+def Chat_node(state: ChatState):
     user_question = state["messages"][-1].content
 
-    prompt = f"""
-You are an expert CFO advisor.
+    prompt = f"""You are a helpful assistant answering questions.
+    You need to answer any question asked by the user and direct to the tools and subgraphs if needed.
+    """
 
-Analyze the financial data and answer the question.
 
-Provide:
-• key insights
-• profitability status
-• cost observations
-• financial risks
-• actionable recommendations
-
-FINANCIAL DATA:
-{context}
-
-QUESTION:
-{user_question}
-"""
-
-    response = llm.invoke(prompt)
-
-    return {
-        "messages": state["messages"] + [response],
-        "financeSheet": finance_data,
-        "summary": response.content,
-    }
 
 # --------------------------------------------------
 # BUILD GRAPH
 # --------------------------------------------------
 graph = StateGraph(ChatState)
 
-graph.add_node("chat_node", chat_node)
+graph.add_node("chat_node", Chat_node)
 graph.add_edge(START, "chat_node")
-graph.add_edge("chat_node", END)
+graph.add_edge("chat_node", "analytic_node")
+graph.add_edge("analytic_node", END)
 
 chatbot = graph.compile(checkpointer=checkpointer)
 
@@ -128,3 +102,5 @@ if __name__ == "__main__":
         print("\nCFOBuddy:", AI)
 
         state = result
+
+print(graph.visualize())
