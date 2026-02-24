@@ -1,130 +1,63 @@
 import os
-from typing import Annotated, List, TypedDict
-
 from dotenv import load_dotenv
-from langgraph.graph import StateGraph, START, END
-from langgraph.graph.message import add_messages
-from langgraph.checkpoint.memory import InMemorySaver
 
-from langchain_core.messages import BaseMessage, HumanMessage
+from langchain_core.messages import HumanMessage
 from langchain_community.document_loaders import CSVLoader
-from langchain_huggingface import ChatHuggingFace, HuggingFaceEndpoint
+
+from router import router  
 
 # --------------------------------------------------
 # ENV SETUP
 # --------------------------------------------------
 load_dotenv()
-hf_token = os.getenv("HUGGINGFACEHUB_API_TOKEN")
-
-hf_model = "Qwen/Qwen2.5-7B-Instruct"
-
-endpoint = HuggingFaceEndpoint(
-    repo_id=hf_model,
-    temperature=0.3,
-    max_new_tokens=512,
-    huggingfacehub_api_token=hf_token,
-)
-
-llm = ChatHuggingFace(llm=endpoint)
 
 # --------------------------------------------------
 # LOAD FINANCIAL DATA
 # --------------------------------------------------
+print("Loading financial data...")
 loader = CSVLoader("data/FinancialStatements.csv")
 documents = loader.load()
+print(f"Loaded {len(documents)} financial records")
 
 # --------------------------------------------------
-# MEMORY CHECKPOINTER
+# INITIAL STATE
 # --------------------------------------------------
-checkpointer = InMemorySaver()
+state = {
+    "messages": [],
+    "financeSheet": documents,
+    "summary": "",
+    "next": "",
+}
 
-# --------------------------------------------------
-# DEFINE STATE
-# --------------------------------------------------
-class ChatState(TypedDict):
-    messages: Annotated[List[BaseMessage], add_messages]
-    financeSheet: object
-    summary: str
-
-# --------------------------------------------------
-# CHAT NODE
-# --------------------------------------------------
-def chat_node(state: ChatState):
-    finance_data = state["financeSheet"]
-
-    # limit context size
-    context = "\n".join([doc.page_content for doc in finance_data[:20]])
-
-    user_question = state["messages"][-1].content
-
-    prompt = f"""
-You are an expert CFO advisor.
-
-Analyze the financial data and answer the question.
-
-Provide:
-• key insights
-• profitability status
-• cost observations
-• financial risks
-• actionable recommendations
-
-FINANCIAL DATA:
-{context}
-
-QUESTION:
-{user_question}
-"""
-
-    response = llm.invoke(prompt)
-
-    return {
-        "messages": state["messages"] + [response],
-        "financeSheet": finance_data,
-        "summary": response.content,
-    }
+thread_id = "cfo-session"   # memory session id
 
 # --------------------------------------------------
-# BUILD GRAPH
+# CLI LOOP
 # --------------------------------------------------
-graph = StateGraph(ChatState)
+print("\n CFOBuddy AI Ready")
+print("Type 'exit' to quit\n")
 
-graph.add_node("chat_node", chat_node)
-graph.add_edge(START, "chat_node")
-graph.add_edge("chat_node", END)
+while True:
+    user_input = input("You: ")
 
-chatbot = graph.compile(checkpointer=checkpointer)
+    if user_input.lower() in ["exit", "quit"]:
+        print("Goodbye")
+        break
 
-# --------------------------------------------------
-# RUN CHAT LOOP
-# --------------------------------------------------
-if __name__ == "__main__":
+    # add user message
+    state["messages"].append(HumanMessage(content=user_input))
 
-    print("\nCFOBuddy AI Ready\n")
+    # invoke router graph
+    result = router.invoke(
+        state,
+        config={"configurable": {"thread_id": thread_id}},
+    )
 
-    state = {
-        "messages": [],
-        "financeSheet": documents,
-        "summary": "",
-    }
+    ai_reply = result["messages"][-1].content
 
-    thread = "cfo-session"
+    print("\nCFOBuddy:", ai_reply)
 
-    while True:
-        user_input = input("\nYou: ")
+    # update state
+    state = result
 
-        if user_input.lower() in ["exit", "quit"]:
-            print("Goodbye")
-            break
-
-        state["messages"].append(HumanMessage(content=user_input))
-
-        result = chatbot.invoke(
-            state,
-            config={"configurable": {"thread_id": thread}},
-        )
-
-        AI = result["messages"][-1].content
-        print("\nCFOBuddy:", AI)
-
-        state = result
+print(router.get_graph().draw_ascii())
