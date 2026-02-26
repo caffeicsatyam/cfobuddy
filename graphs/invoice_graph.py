@@ -46,24 +46,7 @@ You are an accounting assistant.
 
 Extract invoice details from the user's request and create a professional invoice.
 
-Return the invoice in this format:
-
-Invoice Number:
-Date:
-
-Bill To:
-Client Name
-Address
-
-Items:
-- item | quantity | price | total
-
-Subtotal:
-Tax (18%):
-Grand Total:
-
-User Request:
-{user_input}
+User Request:{user_input}
 """
 
     response = llm.invoke(prompt)
