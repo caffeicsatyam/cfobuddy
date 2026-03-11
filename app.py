@@ -1,118 +1,144 @@
 import os
-from dotenv import load_dotenv
-from langchain_core.messages import HumanMessage
-from langchain_community.document_loaders import CSVLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import FAISS
+import glob
+import pandas as pd
+
+from langgraph.graph import StateGraph, MessagesState, START, END
+from langchain.agents import create_agent
+from langchain_core.tools import tool
 from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_groq import ChatGroq
+from langchain_community.vectorstores import FAISS
+from langgraph.checkpoint.memory import InMemorySaver
+from typing import TypedDict, NotRequired
+from pydantic import BaseModel
 
-# your router graph
-from router import router
+from dotenv import load_dotenv
 
-# --------------------------------------------------
-# ENV SETUP
-# --------------------------------------------------
-load_dotenv()
+checkpointer = InMemorySaver()
 
-# --------------------------------------------------
-# LOAD FINANCIAL DATA
-# --------------------------------------------------
-print("Loading financial data...")
-
-csv_path = os.path.join(
-    os.path.dirname(__file__),
-    "data",
-    "FinancialStatements.csv"
+embeddings = HuggingFaceEmbeddings(
+    model_name="sentence-transformers/all-MiniLM-L6-v2",
+    model_kwargs={"device": "cpu"}
 )
 
-loader = CSVLoader(
-    file_path=csv_path,
-    encoding="utf-8-sig" 
+llm = ChatGroq(
+    model="llama-3.3-70b-versatile",
+    temperature=0
 )
 
-documents = loader.load()
+class State(TypedDict):
+    message: str
+    obj: NotRequired[object]
+    file_name: str
 
-if not documents:
-    raise ValueError(" No documents loaded!")
 
-print("\nSample record:")
-print(documents[0])
+def call_faiss_index(state: State):
+    """ 
+    Search for the vector store in the files
+    """
+    if not os.path.exists("faiss_index"):
+        raise FileExistsError(" No Vectore Store Found !")
+    else :
+        return FAISS.load_local(
+            "faiss_index",
+            embeddings=embeddings,
+            allow_dangerous_deserialization=True
+        )
+vector_store = call_faiss_index()
 
-# --------------------------------------------------
-# TEXT SPLITTING
-# --------------------------------------------------
-print("\nSplitting documents...")
+def Search_files():
+    """
+    Search for All the types of file present in data folder.
+    """
+    DATA_FOLDER = []
+    dataframes = {}
 
-splitter = RecursiveCharacterTextSplitter(
-    chunk_size=500,
-    chunk_overlap=50
+    for filepath in glob.glob(os.path.join(DATA_FOLDER, "*.csv")):
+        filename = os.path.basename(filepath)
+        try:
+            df = pd.read_csv(filepath)
+            df.columns = df.columns.str.strip().str.lower()
+            dataframes[filename] = df
+        except Exception as e:
+            print(f"Warning: Could not load {filename} for exact search: {e}")
+
+    return {DATA_FOLDER: list, dataframes: dict}
+
+files = Search_files()
+
+@tool
+def search_financial_docs(query: str) -> str:
+    """
+    Search across all financial and customer data documents using semantic
+    similarity. Best for general questions, summaries, and keyword-based queries.
+    """
+    docs = vector_store.similarity_search(query, k=5)
+    formatted = []
+
+    for i, doc in enumerate(docs):
+        source = doc.metadata.get("source_file", doc.metadata.get("source", "unknown"))
+        formatted.append(f"[Source: {source}]\n{doc.page_content}")
+
+    return "\n\n".join(formatted)
+
+
+@tool
+def exact_lookup(file_name: str, column: str, value: str) -> str:
+    """
+    Perform an exact lookup in a CSV file by matching a column to a value.
+    Use this for specific ID lookups, account numbers, card numbers, client IDs etc.
+
+    Args:
+        file_name: CSV filename e.g. 'cards_data.csv'
+        column: column name to search in e.g. 'client_id', 'id', 'card_number'
+        value: exact value to match e.g. '825'
+    """
+    dataframes = files.dataframe
+    if file_name not in dataframes:
+        available = ", ".join(dataframes.keys())
+        return f"File '{file_name}' not found. Available files: {available}"
+
+    df = dataframes[file_name]
+    col = column.strip().lower()
+
+    if col not in df.columns:
+        available = ", ".join(df.columns.tolist())
+        return f"Column '{column}' not found in {file_name}. Available columns: {available}"
+
+    # Match as string to handle both int and string columns
+    matches = df[df[col].astype(str).str.strip() == str(value).strip()]
+
+    if matches.empty:
+        return f"No records found in {file_name} where {column} = {value}"
+
+    results = []
+    for _, row in matches.iterrows():
+        results.append(row.to_string())
+
+    return f"[Source: {file_name}]\nFound {len(matches)} record(s):\n\n" + "\n\n---\n\n".join(results)
+
+
+class OutputSchema(BaseModel):
+    """Schema for response."""
+    answer: str
+    justification: str
+
+
+structured_llm = llm.bind_tools(
+    [exact_lookup, search_financial_docs, Search_files],
+    response = OutputSchema,
+    strict=True
 )
 
-chunks = splitter.split_documents(documents)
+def chat_node(state: State):
+    message = state["message"]
+    response = structured_llm.invoke(message)
+    return {'message' : response}
 
-print(f"Created {len(chunks)} chunks")
+graph = StateGraph(State)
 
-# --------------------------------------------------
-# EMBEDDINGS (LOCAL & FAST)
-# --------------------------------------------------
-print("\nLoading embedding model (first run may take time)...")
+graph.add_node("chat_node", chat_node)
+graph.add_edge(START, "chat_node")
+graph.add_edge("chat_node", END)
 
-embedding = HuggingFaceEmbeddings(
-    model_name="BAAI/bge-base-en-v1.5"   
-)
-
-# --------------------------------------------------
-# VECTOR STORE (FAISS)
-# --------------------------------------------------
-print("\nBuilding FAISS index...")
-
-vector_store = FAISS.from_documents(chunks, embedding)
-
-retriever = vector_store.as_retriever(
-    search_type="similarity",
-    search_kwargs={"k": 4}
-)
-
-print("FAISS index ready")
-
-# --------------------------------------------------
-# INITIAL STATE (LangGraph Memory)
-# --------------------------------------------------
-state = {
-    "messages": [],
-    "financeSheet": documents,
-    "summary": "",
-    "next": "",
-    "retriever": retriever,
-}
-
-thread_id = "cfo-session"
-
-# --------------------------------------------------
-# CLI LOOP
-# --------------------------------------------------
-print("\n CFOBuddy AI Ready")
-print("Type 'exit' to quit\n")
-
-while True:
-    user_input = input("You: ")
-
-    if user_input.lower() in ["exit", "quit"]:
-        print("Goodbye 👋")
-        break
-
-    # store user message
-    state["messages"].append(HumanMessage(content=user_input))
-
-    # invoke router graph
-    result = router.invoke(
-        state,
-        config={"configurable": {"thread_id": thread_id}},
-    )
-
-    ai_reply = result["messages"][-1].content
-
-    print("\nCFOBuddy:", ai_reply, "\n")
-
-    # update state
-    state = result
+chatbot = graph.compile(checkpointer=checkpointer)
