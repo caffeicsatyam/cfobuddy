@@ -7,7 +7,7 @@ An intelligent financial assistant powered by LangGraph, LLM, and HuggingFace.
 
 ```
 cfobuddy/
-├── main.py                  ← entry point
+├── app.py                  ← entry point
 ├── build_index.py           ← run once to index your data
 ├── requirements.txt
 ├── .env
