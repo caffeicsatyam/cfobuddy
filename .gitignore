@@ -1,4 +1,16 @@
 .env
 venv/
-__pycache__/$ git log --stat -M
-graphs/__pycache__ 
+__pycache__/
+*.pyc
+.DS_Store
+.vscode/
+.idea/
+*.egg-info/
+dist/
+build/
+memory.db
+test.py
+**/__pycache__/
+faiss_index/
+.ipynb_checkpoints/
+Thumbs.db
