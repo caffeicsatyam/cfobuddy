@@ -1,6 +1,6 @@
 # CFO Buddy 💼
 
-An intelligent financial assistant powered by LangGraph, LLM, and HuggingFace. 
+An AI-Powered assistent for CFOs,Where they have every functionality with just prompt.
 ---
 
 ## Project Structure
