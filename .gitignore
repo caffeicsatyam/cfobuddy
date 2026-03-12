@@ -15,6 +15,5 @@ faiss_index/
 .ipynb_checkpoints/
 Thumbs.db
 faiss_index/
-data/
 test.py
 memory.db
