@@ -1,8 +1,13 @@
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage
 from core import CFOBuddy, retrieve_all_threads
-
+import uuid
 load_dotenv()
+
+def get_uuid():
+    response = uuid.uuid4()
+    return response
+
 
 # ==========================
 # RESPONSE PARSER
@@ -29,9 +34,9 @@ print("Type 'exit' to quit.")
 print("  Type 'threads' to see past conversations.")
 print("="*50 + "\n")
 
-thread_id = input("Thread ID (press Enter for 'main'): ").strip() or "main"
-config = {"configurable": {"thread_id": thread_id}}
-print(f"\nUsing thread: {thread_id}\n")
+
+
+config = {"configurable": {"thread_id": get_uuid()}}
 
 while True:
 
@@ -60,3 +65,6 @@ while True:
 
     except Exception as e:
         print("\nError:", e, "\n")
+
+
+print(list(CFOBuddy.get_state_history(config)))

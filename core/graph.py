@@ -23,6 +23,7 @@ Tools available:
 2. exact_lookup — precise lookup by ID, account number, card number etc.
 3. list_available_files — see what files and columns are available
 4. brave_search — search the web for current news and market data
+5. get_finance_data - returns 'quote' 'income'  'balance' 'cashflow' 'metrics' 'ratings'  'news' 'profile'  of any publicly available companies.
 
 Rules:
 - ONLY use tools when the user is asking a data question
