@@ -1,29 +1,17 @@
 import os
-import requests
+import yfinance as yf
+from twelvedata import TDClient
 from langchain_core.tools import tool
 from dotenv import load_dotenv
 
 load_dotenv()
 
-FMP_API_KEY = os.getenv("FMP_API_KEY")
-BASE_URL = "https://financialmodelingprep.com/api/v3"
+TD_API_KEY = os.getenv("TWELVE_DATA_API_KEY")
+td = TDClient(apikey=TD_API_KEY)
 
-
-def fmp_get(endpoint: str, params: dict = {}) -> dict | list | str:
-    """Base FMP API caller with error handling."""
-    params["apikey"] = FMP_API_KEY
-    try:
-        response = requests.get(f"{BASE_URL}/{endpoint}", params=params, timeout=10)
-        response.raise_for_status()
-        data = response.json()
-        if isinstance(data, dict) and "Error Message" in data:
-            return f"FMP Error: {data['Error Message']}"
-        return data
-    except requests.exceptions.Timeout:
-        return "FMP API request timed out."
-    except requests.exceptions.RequestException as e:
-        return f"FMP API request failed: {e}"
-
+# ==========================
+# HELPERS
+# ==========================
 
 def format_number(value) -> str:
     if value is None:
@@ -40,165 +28,225 @@ def format_number(value) -> str:
         return str(value)
 
 
-def _quote(symbol, p, l):
-    data = fmp_get(f"quote/{symbol}")
-    if isinstance(data, str): return data
-    if not data: return f"No quote data found for {symbol}."
-    q = data[0]
-    return f"""📈 {q.get('name')} ({q.get('symbol')})
-Price:        ${q.get('price')}
-Change:       {q.get('change')} ({q.get('changesPercentage')}%)
-Open:         ${q.get('open')}  |  High: ${q.get('dayHigh')}  |  Low: ${q.get('dayLow')}
-Volume:       {q.get('volume'):,}
-Market Cap:   {format_number(q.get('marketCap'))}
-PE Ratio:     {q.get('pe')}  |  EPS: {q.get('eps')}
-52W High:     ${q.get('yearHigh')}  |  52W Low: ${q.get('yearLow')}
-Exchange:     {q.get('exchange')}""".strip()
+# ==========================
+# YFINANCE HANDLERS (primary)
+# ==========================
+
+def _yf_quote(symbol: str) -> str:
+    info = yf.Ticker(symbol).info
+    if not info:
+        return f"No data found for {symbol}."
+    return f"""
+    {info.get('longName', symbol)} ({symbol})
+Price:        ${info.get('currentPrice', 'N/A')}
+Change:       {info.get('regularMarketChange', 'N/A')} ({info.get('regularMarketChangePercent', 'N/A')}%)
+Open/High/Low: ${info.get('open', 'N/A')} / ${info.get('dayHigh', 'N/A')} / ${info.get('dayLow', 'N/A')}
+Volume:       {info.get('volume', 'N/A')}
+Market Cap:   {format_number(info.get('marketCap'))}
+PE Ratio:     {info.get('trailingPE', 'N/A')}  |  EPS: {info.get('trailingEps', 'N/A')}
+52W High/Low: ${info.get('fiftyTwoWeekHigh', 'N/A')} / ${info.get('fiftyTwoWeekLow', 'N/A')}
+Exchange:     {info.get('exchange', 'N/A')}""".strip()
 
 
-def _income(symbol, period, limit):
-    data = fmp_get(f"income-statement/{symbol}", {"period": period, "limit": limit})
-    if isinstance(data, str): return data
-    if not data: return f"No income statement found for {symbol}."
-    result = [f"📊 Income Statement — {symbol} ({period})"]
-    for e in data:
+def _yf_income(symbol: str, limit: int) -> str:
+    df = yf.Ticker(symbol).financials
+    if df is None or df.empty:
+        return f"No income statement found for {symbol}."
+    result = [f"📊 Income Statement — {symbol}"]
+    for col in list(df.columns)[:limit]:
         result.append(f"""
-Period:        {e.get('date')} ({e.get('period')})
-Revenue:       {format_number(e.get('revenue'))}
-Gross Profit:  {format_number(e.get('grossProfit'))}
-Operating Inc: {format_number(e.get('operatingIncome'))}
-Net Income:    {format_number(e.get('netIncome'))}
-EPS:           {e.get('eps')}
-EBITDA:        {format_number(e.get('ebitda'))}""")
+Period:        {str(col)[:10]}
+Revenue:       {format_number(df[col].get('Total Revenue'))}
+Gross Profit:  {format_number(df[col].get('Gross Profit'))}
+Operating Inc: {format_number(df[col].get('Operating Income'))}
+Net Income:    {format_number(df[col].get('Net Income'))}
+EBITDA:        {format_number(df[col].get('EBITDA'))}""")
     return "\n---".join(result)
 
 
-def _balance(symbol, period, limit):
-    data = fmp_get(f"balance-sheet-statement/{symbol}", {"period": period, "limit": limit})
-    if isinstance(data, str): return data
-    if not data: return f"No balance sheet found for {symbol}."
-    result = [f" Balance Sheet — {symbol} ({period})"]
-    for e in data:
+def _yf_balance(symbol: str, limit: int) -> str:
+    df = yf.Ticker(symbol).balance_sheet
+    if df is None or df.empty:
+        return f"No balance sheet found for {symbol}."
+    result = [f"🏦 Balance Sheet — {symbol}"]
+    for col in list(df.columns)[:limit]:
         result.append(f"""
-Period:             {e.get('date')}
-Total Assets:       {format_number(e.get('totalAssets'))}
-Total Liabilities:  {format_number(e.get('totalLiabilities'))}
-Total Equity:       {format_number(e.get('totalStockholdersEquity'))}
-Cash & Equiv:       {format_number(e.get('cashAndCashEquivalents'))}
-Total Debt:         {format_number(e.get('totalDebt'))}""")
+Period:             {str(col)[:10]}
+Total Assets:       {format_number(df[col].get('Total Assets'))}
+Total Liabilities:  {format_number(df[col].get('Total Liabilities Net Minority Interest'))}
+Total Equity:       {format_number(df[col].get('Stockholders Equity'))}
+Cash & Equiv:       {format_number(df[col].get('Cash And Cash Equivalents'))}
+Total Debt:         {format_number(df[col].get('Total Debt'))}""")
     return "\n---".join(result)
 
 
-def _cashflow(symbol, period, limit):
-    data = fmp_get(f"cash-flow-statement/{symbol}", {"period": period, "limit": limit})
-    if isinstance(data, str): return data
-    if not data: return f"No cash flow found for {symbol}."
-    result = [f" Cash Flow — {symbol} ({period})"]
-    for e in data:
+def _yf_cashflow(symbol: str, limit: int) -> str:
+    df = yf.Ticker(symbol).cashflow
+    if df is None or df.empty:
+        return f"No cash flow found for {symbol}."
+    result = [f"💰 Cash Flow — {symbol}"]
+    for col in list(df.columns)[:limit]:
         result.append(f"""
-Period:         {e.get('date')}
-Operating CF:   {format_number(e.get('operatingCashFlow'))}
-Investing CF:   {format_number(e.get('investingCashFlow'))}
-Financing CF:   {format_number(e.get('financingCashFlow'))}
-Free CF:        {format_number(e.get('freeCashFlow'))}
-CapEx:          {format_number(e.get('capitalExpenditure'))}""")
+Period:         {str(col)[:10]}
+Operating CF:   {format_number(df[col].get('Operating Cash Flow'))}
+Investing CF:   {format_number(df[col].get('Investing Cash Flow'))}
+Financing CF:   {format_number(df[col].get('Financing Cash Flow'))}
+Free CF:        {format_number(df[col].get('Free Cash Flow'))}
+CapEx:          {format_number(df[col].get('Capital Expenditure'))}""")
     return "\n---".join(result)
 
 
-def _metrics(symbol, period, l):
-    data = fmp_get(f"key-metrics/{symbol}", {"period": period, "limit": 1})
-    if isinstance(data, str): return data
-    if not data: return f"No key metrics found for {symbol}."
-    m = data[0]
-    return f""" Key Metrics — {symbol} ({m.get('date')})
-PE Ratio:       {m.get('peRatio')}
-PB Ratio:       {m.get('pbRatio')}
-EV/EBITDA:      {m.get('enterpriseValueOverEBITDA')}
-ROE:            {m.get('roe')}
-ROA:            {m.get('returnOnTangibleAssets')}
-Net Margin:     {m.get('netProfitMargin')}
-Current Ratio:  {m.get('currentRatio')}
-Debt/Equity:    {m.get('debtToEquity')}
-FCF/Share:      {m.get('freeCashFlowPerShare')}
-Book Value:     {m.get('bookValuePerShare')}""".strip()
+def _yf_metrics(symbol: str) -> str:
+    info = yf.Ticker(symbol).info
+    if not info:
+        return f"No metrics found for {symbol}."
+    return f"""
+    Key Metrics — {symbol}
+PE Ratio:       {info.get('trailingPE', 'N/A')}
+Forward PE:     {info.get('forwardPE', 'N/A')}
+PB Ratio:       {info.get('priceToBook', 'N/A')}
+EV/EBITDA:      {info.get('enterpriseToEbitda', 'N/A')}
+ROE:            {info.get('returnOnEquity', 'N/A')}
+ROA:            {info.get('returnOnAssets', 'N/A')}
+Net Margin:     {info.get('profitMargins', 'N/A')}
+Current Ratio:  {info.get('currentRatio', 'N/A')}
+Debt/Equity:    {info.get('debtToEquity', 'N/A')}
+Dividend Yield: {info.get('dividendYield', 'N/A')}""".strip()
 
 
-def _ratings(symbol, p, l):
-    data = fmp_get(f"analyst-stock-recommendations/{symbol}", {"limit": 5})
-    if isinstance(data, str): return data
-    if not data: return f"No analyst ratings found for {symbol}."
-    result = [f" Analyst Ratings — {symbol}"]
-    for e in data[:5]:
-        result.append(
-            f"{e.get('date')} | Buy: {e.get('analystRatingsBuy')} | "
-            f"Hold: {e.get('analystRatingsHold')} | Sell: {e.get('analystRatingsSell')} | "
-            f"Strong Buy: {e.get('analystRatingsStrongBuy')} | "
-            f"Strong Sell: {e.get('analystRatingsStrongSell')}"
-        )
-    return "\n".join(result)
+def _yf_ratings(symbol: str) -> str:
+    try:
+        recs = yf.Ticker(symbol).recommendations
+        if recs is None or recs.empty:
+            raise ValueError("empty")
+        result = [f"🎯 Analyst Ratings — {symbol}"]
+        for _, row in recs.tail(5).iterrows():
+            result.append(
+                f"{str(row.name)[:10]} | {row.get('Firm', 'N/A')} | "
+                f"{row.get('To Grade', 'N/A')} (from {row.get('From Grade', 'N/A')})"
+            )
+        return "\n".join(result)
+    except:
+        return f"No analyst ratings available for {symbol}."
 
 
-def _news(symbol, p, limit):
-    data = fmp_get("stock_news", {"tickers": symbol, "limit": limit})
-    if isinstance(data, str): return data
-    if not data: return f"No news found for {symbol}."
+def _yf_news(symbol: str, limit: int) -> str:
+    news = yf.Ticker(symbol).news
+    if not news:
+        return f"No news found for {symbol}."
     result = [f" Latest News — {symbol}"]
-    for a in data:
-        result.append(f"• [{a.get('publishedDate', '')[:10]}] {a.get('title')}\n  {a.get('url')}")
+    for article in news[:limit]:
+        content = article.get('content', {})
+        title = content.get('title', 'No title')
+        url = content.get('canonicalUrl', {}).get('url', '')
+        date = content.get('pubDate', '')[:10]
+        result.append(f"• [{date}] {title}\n  {url}")
     return "\n\n".join(result)
 
 
-def _profile(symbol, p, l):
-    data = fmp_get(f"profile/{symbol}")
-    if isinstance(data, str): return data
-    if not data: return f"No profile found for {symbol}."
-    p = data[0]
-    return f""" {p.get('companyName')} ({p.get('symbol')})
-Sector:     {p.get('sector')}  |  Industry: {p.get('industry')}
-Exchange:   {p.get('exchangeShortName')}  |  Country: {p.get('country')}
-CEO:        {p.get('ceo')}
-Employees:  {p.get('fullTimeEmployees')}
-Market Cap: {format_number(p.get('mktCap'))}
-IPO Date:   {p.get('ipoDate')}
-Website:    {p.get('website')}
+def _yf_profile(symbol: str) -> str:
+    info = yf.Ticker(symbol).info
+    if not info:
+        return f"No profile found for {symbol}."
+    return f"""
+    {info.get('longName', symbol)} ({symbol})
+Sector:     {info.get('sector', 'N/A')}  |  Industry: {info.get('industry', 'N/A')}
+Exchange:   {info.get('exchange', 'N/A')}  |  Country: {info.get('country', 'N/A')}
+Employees:  {info.get('fullTimeEmployees', 'N/A')}
+Market Cap: {format_number(info.get('marketCap'))}
+Website:    {info.get('website', 'N/A')}
 
-{p.get('description', 'N/A')[:400]}...""".strip()
+{info.get('longBusinessSummary', 'N/A')[:400]}...""".strip()
 
+
+# ==========================
+# TWELVE DATA HANDLERS (complement — price history, real-time)
+# ==========================
+
+def _td_price_history(symbol: str, interval: str = "1day", limit: int = 30) -> str:
+    """Get OHLCV price history — Twelve Data strength."""
+    try:
+        ts = td.time_series(
+            symbol=symbol,
+            interval=interval,
+            outputsize=limit
+        ).as_json()
+        if not ts:
+            return f"No price history found for {symbol}."
+        result = [f" Price History — {symbol} ({interval})"]
+        for bar in ts[:10]:
+            result.append(
+                f"{bar.get('datetime')} | O: {bar.get('open')} "
+                f"H: {bar.get('high')} L: {bar.get('low')} "
+                f"C: {bar.get('close')} V: {bar.get('volume', 'N/A')}"
+            )
+        return "\n".join(result)
+    except Exception as e:
+        return f"Twelve Data error: {e}"
+
+
+def _td_quote(symbol: str) -> str:
+    """Real-time quote from Twelve Data."""
+    try:
+        quote = td.quote(symbol=symbol).as_json()
+        if not quote:
+            return f"No quote found for {symbol}."
+        return f"""
+    {quote.get('name', symbol)} ({symbol}) — Twelve Data
+Price:         ${quote.get('close', 'N/A')}
+Change:        {quote.get('change', 'N/A')} ({quote.get('percent_change', 'N/A')}%)
+Open/High/Low: ${quote.get('open', 'N/A')} / ${quote.get('high', 'N/A')} / ${quote.get('low', 'N/A')}
+Volume:        {quote.get('volume', 'N/A')}
+52W High/Low:  ${quote.get('fifty_two_week', {}).get('high', 'N/A')} / ${quote.get('fifty_two_week', {}).get('low', 'N/A')}
+Market Open:   {quote.get('is_market_open', 'N/A')}""".strip()
+    except Exception as e:
+        return f"Twelve Data error: {e}"
+
+
+# ==========================
+# HANDLER MAP
+# ==========================
+
+HANDLERS = {
+    # yfinance — fundamental data
+    "quote":    lambda s, p, l: _yf_quote(s),
+    "income":   lambda s, p, l: _yf_income(s, l),
+    "balance":  lambda s, p, l: _yf_balance(s, l),
+    "cashflow": lambda s, p, l: _yf_cashflow(s, l),
+    "metrics":  lambda s, p, l: _yf_metrics(s),
+    "ratings":  lambda s, p, l: _yf_ratings(s),
+    "news":     lambda s, p, l: _yf_news(s, l),
+    "profile":  lambda s, p, l: _yf_profile(s),
+    # Twelve Data — price/market data
+    "history":  lambda s, p, l: _td_price_history(s, limit=l),
+    "realtime": lambda s, p, l: _td_quote(s),
+}
 
 # ==========================
 # SINGLE UNIFIED TOOL
 # ==========================
 
-HANDLERS = {
-    "quote":    _quote,
-    "income":   _income,
-    "balance":  _balance,
-    "cashflow": _cashflow,
-    "metrics":  _metrics,
-    "ratings":  _ratings,
-    "news":     _news,
-    "profile":  _profile,
-}
-
 @tool
 def get_financial_data(symbol: str, data_type: str, period: str = "annual", limit: int = 3) -> str:
     """
-    Fetch any financial data for a publicly traded company using FMP API.
-    Use this for ANY question about stocks, company financials, or market data.
+    Fetch any financial data for a publicly traded company.
+    Uses yfinance (fundamentals) and Twelve Data (price history & real-time).
 
     Args:
         symbol: Stock ticker e.g. 'AAPL', 'MSFT', 'GOOGL', 'TSLA'
-        data_type: Type of data to fetch. Must be one of:
-            'quote'    — live price, change, volume, market cap, PE, EPS
-            'income'   — revenue, gross profit, net income, EPS, EBITDA
-            'balance'  — total assets, liabilities, equity, cash, debt
-            'cashflow' — operating, investing, financing, free cash flow
-            'metrics'  — PE, PB, ROE, ROA, margins, current ratio, debt/equity
-            'ratings'  — analyst buy/hold/sell recommendations
-            'news'     — latest news articles
-            'profile'  — company overview, sector, CEO, employees
+        data_type: Type of data:
+            'quote'    — live price, volume, market cap, PE (yfinance)
+            'income'   — revenue, net income, EBITDA (yfinance)
+            'balance'  — assets, liabilities, equity (yfinance)
+            'cashflow' — operating, free cash flow (yfinance)
+            'metrics'  — PE, ROE, margins, ratios (yfinance)
+            'ratings'  — analyst recommendations (yfinance)
+            'news'     — latest news articles (yfinance)
+            'profile'  — company overview (yfinance)
+            'history'  — OHLCV price history (Twelve Data)
+            'realtime' — real-time quote with 52W range (Twelve Data)
         period: 'annual' or 'quarter' (default: 'annual')
-        limit: Number of periods to return (default: 3)
+        limit: Number of periods or bars to return (default: 3)
     """
     symbol = symbol.upper().strip()
     data_type = data_type.lower().strip()

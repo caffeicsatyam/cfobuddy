@@ -1,1 +1,1 @@
-
+print("  Type 'threads' to see past conversations.")
