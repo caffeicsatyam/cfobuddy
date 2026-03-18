@@ -1,6 +1,8 @@
-from langchain_huggingface import HuggingFaceEmbeddings
+from llama_index.core import Settings
+from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 
-embeddings = HuggingFaceEmbeddings(
+Settings.embed_model = HuggingFaceEmbedding(
     model_name="sentence-transformers/all-MiniLM-L6-v2",
-    model_kwargs={"device": "cpu"}
+    cache_folder="C:/Users/MSI/.cache/huggingface/hub"
 )
+Settings.llm = None

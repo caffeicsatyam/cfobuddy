@@ -34,10 +34,7 @@ print("Type 'exit' to quit.")
 print("  Type 'threads' to see past conversations.")
 print("="*50 + "\n")
 
-
-
 config = {"configurable": {"thread_id": get_uuid()}}
-
 while True:
 
     user_input = input("You: ").strip()
@@ -59,7 +56,6 @@ while True:
             {"messages": [HumanMessage(content=user_input)]},
             config=config
         )
-
         content = parse_response(response["messages"][-1].content)
         print("\nCFO Buddy:", content, "\n")
 

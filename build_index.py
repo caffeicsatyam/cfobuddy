@@ -1,121 +1,63 @@
 import os
 from dotenv import load_dotenv
+from llama_index.readers.file import PyMuPDFReader
+from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_community.vectorstores import FAISS
-from langchain_community.document_loaders import (
-    CSVLoader,
-    PyPDFLoader,
-    UnstructuredExcelLoader,
-    Docx2txtLoader,
+
+from llama_index.core import (
+    VectorStoreIndex,
+    SimpleDirectoryReader,
+    Settings,
 )
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+
 
 load_dotenv()
 
 # ==========================
-# EMBEDDINGS
+# EMBEDDING MODEL
 # ==========================
 
-embeddings = HuggingFaceEmbeddings(
+Settings.embed_model = HuggingFaceEmbedding(
     model_name="sentence-transformers/all-MiniLM-L6-v2",
-    model_kwargs={"device": "cpu"}
+    cache_folder="C:/Users/MSI/.cache/huggingface/hub"  
 )
+Settings.llm = None
 
 # ==========================
-# FILE LOADER MAP
-# ==========================
-
-LOADERS = {
-    ".csv":  CSVLoader,
-    ".pdf":  PyPDFLoader,
-    ".xlsx": UnstructuredExcelLoader,
-    ".xls":  UnstructuredExcelLoader,
-    ".docx": Docx2txtLoader,
-}
-
-SUPPORTED_EXTENSIONS = set(LOADERS.keys())
-
-# ==========================
-# LOAD ALL FILES FROM data/ FOLDER
+# LOAD ALL FILES FROM data/
+# SimpleDirectoryReader handles CSV, PDF, Excel, Word natively
 # ==========================
 
 DATA_FOLDER = "data"
-all_documents = []
+STORAGE_FOLDER = "storage"
 
 if not os.path.exists(DATA_FOLDER):
     raise FileNotFoundError(f"'{DATA_FOLDER}/' folder not found.")
 
-all_files = [
-    f for f in os.listdir(DATA_FOLDER)
-    if os.path.splitext(f)[1].lower() in SUPPORTED_EXTENSIONS
-]
+print(f"Loading files from '{DATA_FOLDER}/'...\n")
 
-if not all_files:
-    raise FileNotFoundError(
-        f"No supported files found in '{DATA_FOLDER}/'. "
-        f"Supported types: {', '.join(SUPPORTED_EXTENSIONS)}"
-    )
+documents = SimpleDirectoryReader(
+    input_dir=DATA_FOLDER,
+    recursive=True,
+    filename_as_id=True,
+    file_extractor={".pdf": PyMuPDFReader()}  
+).load_data(show_progress=True)
 
-print(f"Found {len(all_files)} files:\n")
+if not documents:
+    raise ValueError(f"No documents found in '{DATA_FOLDER}/'.")
 
-for filename in all_files:
-    filepath = os.path.join(DATA_FOLDER, filename)
-    ext = os.path.splitext(filename)[1].lower()
-
-    try:
-        loader_class = LOADERS[ext]
-        loader = loader_class(filepath)
-        docs = loader.load()
-
-        for doc in docs:
-            doc.metadata["source_file"] = filename
-            doc.metadata["source"] = filename
-            doc.metadata["file_type"] = ext.lstrip(".")
-
-        all_documents.extend(docs)
-        print(f" {filename} ({ext}) — {len(docs)} chunks loaded")
-
-    except Exception as e:
-        print(f"  {filename} — failed to load: {e}")
-
-print(f"\nTotal documents loaded: {len(all_documents)}")
-
+print(f"\nLoaded {len(documents)} document chunks.")
 # ==========================
-# TEXT SPLITTING
+# BUILD INDEX
 # ==========================
-
-splitter = RecursiveCharacterTextSplitter(
-    chunk_size=500,
-    chunk_overlap=50
+print("Building index...")
+index = VectorStoreIndex.from_documents(
+    documents,
+    show_progress=True
 )
-
-texts = splitter.split_documents(all_documents)
-print(f"Split into {len(texts)} chunks.\n")
-
 # ==========================
-# BUILD FAISS INDEX IN BATCHES
+# PERSIST TO DISK
 # ==========================
-
-BATCH_SIZE = 100
-
-total_batches = (len(texts) + BATCH_SIZE - 1) // BATCH_SIZE
-print(f"Building FAISS index in {total_batches} batches of {BATCH_SIZE}...")
-
-vector_store = None
-
-for i in range(0, len(texts), BATCH_SIZE):
-    batch = texts[i:i + BATCH_SIZE]
-    batch_num = (i // BATCH_SIZE) + 1
-
-    print(f"  Embedding batch {batch_num}/{total_batches} ({len(batch)} chunks)...")
-
-    if vector_store is None:
-        vector_store = FAISS.from_documents(batch, embeddings)
-    else:
-        batch_store = FAISS.from_documents(batch, embeddings)
-        vector_store.merge_from(batch_store)
-
-vector_store.save_local("faiss_index")
-print("\nFAISS index saved to 'faiss_index/'")
+index.storage_context.persist(persist_dir=STORAGE_FOLDER)
+print(f"\nIndex saved to '{STORAGE_FOLDER}/'")
 print("Now run: python main.py")

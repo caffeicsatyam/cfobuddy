@@ -10,7 +10,7 @@ from tools import all_tools
 from tools.finance import get_financial_data
 from tools.search import search_financial_docs
 from tools.lookup import exact_lookup, list_available_files
-from tools.web_search import search
+from tools.web_search import brave_search
 
 # ==========================
 # SYSTEM PROMPTS
@@ -26,7 +26,7 @@ Tools available:
 1. search_financial_docs — semantic search across internal CSV/PDF data
 2. exact_lookup — precise lookup by ID, account number, card number etc.
 3. list_available_files — see what files and columns are available
-4. search — search the any web based new and services when asked.
+4. search — search the any web based new and services when asked from duck duck go.
 5. get_financial_data — live stock data (yfinance + Twelve Data):
    use data_type: 'quote' 'income' 'balance' 'cashflow' 'metrics' 'ratings' 'news' 'profile' 'history' 'realtime'
 
@@ -35,7 +35,7 @@ Routing rules:
 - For specific IDs/numbers in internal data → use exact_lookup
 - For questions about internal CSV/PDF files → use search_financial_docs
 - For live stock prices, financials, ratings of public companies → use get_financial_data
-- For current news or general web queries → use brave_search
+- For current news or general web queries → use search
 - If unsure what files exist → use list_available_files first
 - Always present data clearly with labels and mention the source
 """)
@@ -57,11 +57,25 @@ Always:
 """)
 
 SUMMARY_PROMPT = """
-Summarize the following financial response concisely.
-Keep all key numbers, insights, and sources accurate.
-Format clearly for a CFO.
+You are a financial data presenter. Your ONLY job is to present the retrieved data clearly.
 
-Response:
+STRICT RULES — NEVER BREAK THESE:
+- NEVER change, modify, round, or recalculate any numbers
+- NEVER add information that is not in the retrieved data
+- NEVER guess, infer, or hallucinate missing data
+- NEVER calculate percentages, ratios, or derived metrics yourself
+- Copy ALL financial figures EXACTLY as they appear in the source
+- If data is not found, say "Data not found in the provided documents"
+- Do NOT add recommendations, conclusions, or opinions unless explicitly asked
+
+FORMATTING RULES:
+- For PDF/narrative data: present as clean bullet points preserving exact numbers
+- For CSV/tabular data: present as a neat labeled list or table
+- For stock/API data: present with proper units (₹, $, B, M, %)
+- Always mention the source at the end e.g. (Source: zomato_shareholder_letter.pdf)
+- Keep response concise — only include what was asked
+
+Response to present:
 {response}
 """
 
@@ -69,10 +83,10 @@ Response:
 # TOOL SETS
 # ==========================
 
-Basic_tools = [search_financial_docs, exact_lookup, list_available_files, search]
+Basic_tools = [search_financial_docs, exact_lookup, list_available_files, brave_search]
 internal_tool_node = ToolNode(Basic_tools)
 
-finance_tools = [get_financial_data]
+finance_tools = [get_financial_data,  brave_search]
 finance_tool_node = ToolNode(finance_tools)
 
 # ==========================
@@ -101,18 +115,31 @@ def route_query(state: State):
 
 
 def route_after_upload(state: State):
-    """Route to finance_node or model after upload."""
+    """Let the LLM decide routing instead of keyword matching."""
     last_message = state["messages"][-1]
-    content = last_message.content.lower()
+    
+    router_prompt = f"""You are a query router. Classify this query into one of two categories:
 
-    finance_keywords = [
-        "stock", "price", "quote", "market cap", "revenue", "earnings",
-        "balance sheet", "cash flow", "income statement", "analyst",
-        "rating", "pe ratio", "eps", "dividend", "ipo", "nasdaq", "nyse",
-        "profit", "loss", "quarterly", "annual report", "ticker"
-    ]
+1. "finance_node" - ONLY for live market data queries:
+   - Real-time stock prices, quotes
+   - Live market cap, PE ratio
+   - Current analyst ratings
+   - Stock news from today
+   
+2. "model" - For everything else:
+   - Questions about uploaded documents (PDFs, CSVs)
+   - Historical financial data from internal files
+   - Customer/account data lookups
+   - General financial questions
 
-    if any(kw in content for kw in finance_keywords):
+Query: {last_message.content}
+
+Reply with ONLY "finance_node" or "model". Nothing else."""
+
+    response = llm.invoke(router_prompt)
+    decision = response.content.strip().lower()
+    
+    if "finance_node" in decision:
         return "finance_node"
     return "model"
 
@@ -174,8 +201,7 @@ def summarize_node(state: State):
 # [finance_node]   [model]
 #       |              |
 # [finance_tools] [internal_tools]
-#       \              /
-#        [summarize_node]
+#
 #              |
 #            [END]
 # ==========================
@@ -191,8 +217,6 @@ graph_builder.add_node("summarize_node", summarize_node)
 
 # Entry
 graph_builder.add_edge(START, "upload_node")
-
-# Route after upload based on query type
 graph_builder.add_conditional_edges(
     "upload_node",
     route_after_upload,
@@ -201,31 +225,22 @@ graph_builder.add_conditional_edges(
         "finance_node": "finance_node"
     }
 )
-
-# Model → internal tools loop → summarize
 graph_builder.add_conditional_edges(
     "model",
     tools_condition,
     {
         "tools": "internal_tools",
-        END: "summarize_node"
+        END: END
     }
 )
-graph_builder.add_edge("internal_tools", "model")
-
-# Finance → finance tools loop → summarize
 graph_builder.add_conditional_edges(
     "finance_node",
     tools_condition,
     {
         "tools": "finance_tools",
-        END: "summarize_node"
+        END: END     
     }
 )
-graph_builder.add_edge("finance_tools", "finance_node")
-
-# Summarize → END
-graph_builder.add_edge("summarize_node", END)
 
 # ==========================
 # COMPILE
