@@ -114,7 +114,7 @@ python build_index.py
 ### 7. Run CFO Buddy
 
 ```bash
-python main.py
+python app.py
 ```
 
 ---
