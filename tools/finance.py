@@ -52,7 +52,7 @@ def _yf_income(symbol: str, limit: int) -> str:
     df = yf.Ticker(symbol).financials
     if df is None or df.empty:
         return f"No income statement found for {symbol}."
-    result = [f"📊 Income Statement — {symbol}"]
+    result = [f"Income Statement — {symbol}"]
     for col in list(df.columns)[:limit]:
         result.append(f"""
 Period:        {str(col)[:10]}
@@ -68,7 +68,7 @@ def _yf_balance(symbol: str, limit: int) -> str:
     df = yf.Ticker(symbol).balance_sheet
     if df is None or df.empty:
         return f"No balance sheet found for {symbol}."
-    result = [f"🏦 Balance Sheet — {symbol}"]
+    result = [f"Balance Sheet — {symbol}"]
     for col in list(df.columns)[:limit]:
         result.append(f"""
 Period:             {str(col)[:10]}

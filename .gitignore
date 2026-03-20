@@ -11,6 +11,6 @@ build/
 memory.db
 test.py
 **/__pycache__/
-faiss_index/
 .ipynb_checkpoints/
 Thumbs.db
+storage/

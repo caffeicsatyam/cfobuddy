@@ -1,43 +1,49 @@
 import os
+from dotenv import load_dotenv
 from langchain_core.tools import tool
 
-from llama_index.core import (
-    VectorStoreIndex,
-    StorageContext,
-    load_index_from_storage,
-    Settings,
-)
+from llama_index.core import VectorStoreIndex, StorageContext, Settings
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+from llama_index.vector_stores.postgres import PGVectorStore
+
+load_dotenv()
 
 # ==========================
-# EMBEDDING MODEL 
+# EMBEDDING MODEL
 # ==========================
 
 Settings.embed_model = HuggingFaceEmbedding(
     model_name="sentence-transformers/all-MiniLM-L6-v2",
-    cache_folder="C:/Users/MSI/.cache/huggingface/hub"  
+    cache_folder="C:/Users/MSI/.cache/huggingface/hub"
 )
 Settings.llm = None
 
 # ==========================
-# LOAD INDEX FROM STORAGE
+# LOAD INDEX FROM NEON DB
 # ==========================
 
-STORAGE_FOLDER = "storage"
-
 def load_index():
-    if not os.path.exists(STORAGE_FOLDER):
-        raise FileNotFoundError(
-            f"No index found at '{STORAGE_FOLDER}/'. Run: python build_index.py"
-        )
-    storage_context = StorageContext.from_defaults(persist_dir=STORAGE_FOLDER)
-    return load_index_from_storage(storage_context)
+    vector_store = PGVectorStore.from_params(
+        host=os.getenv("NEON_HOST"),
+        database=os.getenv("NEON_DATABASE"),
+        user=os.getenv("NEON_USER"),
+        password=os.getenv("NEON_PASSWORD"),
+        port="5432",
+        table_name="cfo_buddy_vectors",
+        embed_dim=384,
+    )
+    return VectorStoreIndex.from_vector_store(vector_store)
+
 
 index = load_index()
-query_engine = index.as_query_engine(
-    similarity_top_k=5,
-    response_mode="no_text",  
-)
+
+
+def reload_index():
+    """Refresh in-memory index after rebuild."""
+    global index
+    index = load_index()
+    print("Index reloaded from Neon DB.")
+
 
 # ==========================
 # TOOL

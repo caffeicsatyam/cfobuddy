@@ -22,6 +22,10 @@ You are CFO Buddy, an intelligent financial data assistant and finance buddy to 
 You have access to multiple datasets including financial statements,
 customer accounts, cards, transactions, and more.
 
+- After retrieving documents with search_financial_docs, ALWAYS summarize the retrieved content in a clear, structured response
+- Never return raw chunks — always interpret and present the findings
+- For broad queries like 'key insights' or 'summary', synthesize all retrieved chunks into a coherent answer
+
 Tools available:
 1. search_financial_docs — semantic search across internal CSV/PDF data
 2. exact_lookup — precise lookup by ID, account number, card number etc.
@@ -38,6 +42,9 @@ Routing rules:
 - For current news or general web queries → use search
 - If unsure what files exist → use list_available_files first
 - Always present data clearly with labels and mention the source
+- When user mentions a specific file (e.g. 'from transformers.pdf', 'from zomato letter') → ALWAYS use search_financial_docs, never web search
+- After retrieving chunks with search_financial_docs → summarize them 
+  clearly, never dump raw text
 """)
 
 FINANCE_PROMPT = SystemMessage(content="""
@@ -56,28 +63,28 @@ Always:
 - For most up-to-date real-time price → use 'realtime'
 """)
 
-SUMMARY_PROMPT = """
-You are a financial data presenter. Your ONLY job is to present the retrieved data clearly.
+# SUMMARY_PROMPT = """
+# You are a financial data presenter. Your ONLY job is to present the retrieved data clearly.
 
-STRICT RULES — NEVER BREAK THESE:
-- NEVER change, modify, round, or recalculate any numbers
-- NEVER add information that is not in the retrieved data
-- NEVER guess, infer, or hallucinate missing data
-- NEVER calculate percentages, ratios, or derived metrics yourself
-- Copy ALL financial figures EXACTLY as they appear in the source
-- If data is not found, say "Data not found in the provided documents"
-- Do NOT add recommendations, conclusions, or opinions unless explicitly asked
+# STRICT RULES — NEVER BREAK THESE:
+# - NEVER change, modify, round, or recalculate any numbers
+# - NEVER add information that is not in the retrieved data
+# - NEVER guess, infer, or hallucinate missing data
+# - NEVER calculate percentages, ratios, or derived metrics yourself
+# - Copy ALL financial figures EXACTLY as they appear in the source
+# - If data is not found, say "Data not found in the provided documents"
+# - Do NOT add recommendations, conclusions, or opinions unless explicitly asked
 
-FORMATTING RULES:
-- For PDF/narrative data: present as clean bullet points preserving exact numbers
-- For CSV/tabular data: present as a neat labeled list or table
-- For stock/API data: present with proper units (₹, $, B, M, %)
-- Always mention the source at the end e.g. (Source: zomato_shareholder_letter.pdf)
-- Keep response concise — only include what was asked
+# FORMATTING RULES:
+# - For PDF/narrative data: present as clean bullet points preserving exact numbers
+# - For CSV/tabular data: present as a neat labeled list or table
+# - For stock/API data: present with proper units (₹, $, B, M, %)
+# - Always mention the source at the end e.g. (Source: zomato_shareholder_letter.pdf)
+# - Keep response concise — only include what was asked
 
-Response to present:
-{response}
-"""
+# Response to present:
+# {response}
+# """
 
 # ==========================
 # TOOL SETS
@@ -159,7 +166,7 @@ def model_node(state: State):
     return {"messages": [response]}
 
 
-@traceable(run_type="chain")   # Bug fix: run_type must be 'chain', 'llm', or 'tool'
+@traceable(run_type="chain")  
 def finance_node(state: State):
     """Finance LLM node — handles public company/market queries via Yahoo Finance API."""
     messages = [FINANCE_PROMPT] + state["messages"]
@@ -167,27 +174,27 @@ def finance_node(state: State):
     return {"messages": [response]}
 
 
-def summarize_node(state: State):
-    """Summarize only if response contains actual financial data."""
-    last_message = state["messages"][-1]
-    content = last_message.content
+# def summarize_node(state: State):
+#     """Summarize only if response contains actual financial data."""
+#     last_message = state["messages"][-1]
+#     content = last_message.content
 
-    # Skip summarizing short or conversational responses
-    financial_indicators = [
-        "$", "revenue", "profit", "loss", "ratio", "income",
-        "balance", "cash", "equity", "assets", "earnings", "pe",
-        "quarter", "annual", "billion", "million", "source:"
-    ]
+#     # Skip summarizing short or conversational responses
+#     financial_indicators = [
+#         "$", "revenue", "profit", "loss", "ratio", "income",
+#         "balance", "cash", "equity", "assets", "earnings", "pe",
+#         "quarter", "annual", "billion", "million", "source:"
+#     ]
 
-    is_financial = any(kw in content.lower() for kw in financial_indicators)
-    is_long = len(content) > 300
+#     is_financial = any(kw in content.lower() for kw in financial_indicators)
+#     is_long = len(content) > 300
 
-    if not (is_financial and is_long):
-        return state  # pass through unchanged
+#     if not (is_financial and is_long):
+#         return state  # pass through unchanged
 
-    prompt = SUMMARY_PROMPT.format(response=content)
-    summary = llm.invoke(prompt)
-    return {"messages": [summary]}
+#     prompt = SUMMARY_PROMPT.format(response=content)
+#     summary = llm.invoke(prompt)
+#     return {"messages": [summary]}
 
 # ==========================
 # BUILD GRAPH
@@ -213,7 +220,7 @@ graph_builder.add_node("model", model_node)
 graph_builder.add_node("finance_node", finance_node)
 graph_builder.add_node("internal_tools", internal_tool_node)
 graph_builder.add_node("finance_tools", finance_tool_node)
-graph_builder.add_node("summarize_node", summarize_node)
+# graph_builder.add_node("summarize_node", summarize_node)
 
 # Entry
 graph_builder.add_edge(START, "upload_node")
