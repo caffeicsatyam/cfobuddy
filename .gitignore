@@ -1,16 +1,45 @@
+# Environment
 .env
 venv/
+
+# Python
 __pycache__/
+**/__pycache__/
 *.pyc
-.DS_Store
+*.pyo
+*.pyd
+
+# Vector stores
+storage/
+faiss_index/
+
+# Database
+memory.db
+
+# Data files (optional — remove if you want data in repo)
+data/
+
+# Testing
+test.py
+test.ipynb
+
+# IDE
 .vscode/
 .idea/
-*.egg-info/
-dist/
-build/
-memory.db
-test.py
-**/__pycache__/
-.ipynb_checkpoints/
+
+# Claude/Agents
+.agents/
+.claude/
+
+# OS
+.DS_Store
 Thumbs.db
-storage/
+
+# Misc
+skills-lock.json
+req.txt          # ← looks like a duplicate of requirements.txt
+
+# Static/Templates (optional — remove if you want these in repo)
+static/
+templates/
+
