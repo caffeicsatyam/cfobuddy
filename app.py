@@ -2,16 +2,13 @@ from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage
 from core import CFOBuddy, retrieve_all_threads
 import uuid
+
 load_dotenv()
-
-def get_uuid():
-    response = uuid.uuid4()
-    return response
-
 
 # ==========================
 # RESPONSE PARSER
 # ==========================
+
 def parse_response(content):
     if isinstance(content, list):
         text_parts = []
@@ -28,18 +25,23 @@ def parse_response(content):
 # ==========================
 # CHAT LOOP
 # ==========================
-print("="*50)
-print("CFO Buddy — Ready!")
-print("Type 'exit' to quit.")
-print("  Type 'threads' to see past conversations.")
-print("="*50 + "\n")
 
-config = {"configurable": {"thread_id": get_uuid()}}
+print("=" * 50)
+print("  CFO Buddy — Ready!")
+print("  Type 'exit' or 'stop' to quit.")
+print("  Type 'threads' to see past conversations.")
+print("=" * 50 + "\n")
+
+# New thread every session
+thread_id = str(uuid.uuid4())
+config = {"configurable": {"thread_id": thread_id}}
+print(f"Session ID: {thread_id}\n")
+
 while True:
 
     user_input = input("You: ").strip()
 
-    if user_input.lower() in ["quit", "exit"]:
+    if user_input.lower() in ["quit", "exit", "stop", "bye", "q"]:
         print("Goodbye!")
         break
 
@@ -61,6 +63,3 @@ while True:
 
     except Exception as e:
         print("\nError:", e, "\n")
-
-
-print(list(CFOBuddy.get_state_history(config)))

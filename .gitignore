@@ -16,7 +16,6 @@ faiss_index/
 # Database
 memory.db
 
-# Data files (optional — remove if you want data in repo)
 data/
 
 # Testing

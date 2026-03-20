@@ -53,7 +53,7 @@ def build_index():
         show_progress=True
     )
 
-    print("\n✅ Vectors stored in Neon DB!")
+    print("\nVectors stored in Neon DB!")
 
     from tools.search import reload_index
     reload_index()
