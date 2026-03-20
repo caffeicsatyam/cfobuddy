@@ -1,17 +1,22 @@
 # CFO Buddy 💼
 
-An intelligent financial assistant powered by LangGraph, LLM, and HuggingFace. 
+An intelligent financial data assistant powered by LangGraph, Groq, LlamaIndex, and Neon DB. Ask questions about your financial statements, customer accounts, cards, live stock data, and more.
+
 ---
 
 ## Project Structure
 
 ```
 cfobuddy/
-├── main.py                  ← entry point
+├── app.py                   ← CLI entry point
 ├── build_index.py           ← run once to index your data
 ├── requirements.txt
 ├── .env
 ├── .gitignore
+│
+├── api/
+│   ├── __init__.py
+│   └── app.py               ← FastAPI server
 │
 ├── core/
 │   ├── __init__.py
@@ -23,28 +28,30 @@ cfobuddy/
 │
 ├── tools/
 │   ├── __init__.py
-│   ├── search.py            ← search_financial_docs (FAISS)
+│   ├── search.py            ← LlamaIndex + Neon pgvector search
 │   ├── lookup.py            ← exact_lookup, list_available_files
-│   └── web_search.py        ← brave_search
+│   ├── finance_api.py       ← yfinance + Twelve Data
+│   ├── chart.py             ← chart generation tool
+│   └── web_search.py        ← DuckDuckGo search
 │
-├── data/                    ← put your files here
-│   ├── FinancialStatements.csv
-│   ├── cards_data.csv
-│   └── report.pdf
-│
-└── faiss_index/             ← auto-generated, do not commit
+└── data/                    ← put your files here (not committed)
+    ├── FinancialStatements.csv
+    └── report.pdf
 ```
+
+---
 
 ## Features
 
 - **Multi-file support** — CSV, PDF, Excel, Word
-- **Semantic search** — find relevant data across all your documents
+- **Semantic search** — LlamaIndex + Neon pgvector for document retrieval
 - **Exact lookup** — precise queries by ID, account number, card number etc.
-- **Web search** — live market data and news via Brave Search
-- **Persistent memory** — conversations saved to SQLite, resumable by thread ID
-- **LangGraph architecture** — modular, extensible graph-based agent
-
----
+- **Live financial data** — stock prices, income statements, balance sheets via yfinance + Twelve Data
+- **Web search** — real-time news via DuckDuckGo
+- **Chart generation** — auto-generates Plotly charts from financial data
+- **Persistent memory** — conversations saved to SQLite by thread ID
+- **LangGraph architecture** — modular, extensible graph-based ReAct agent
+- **FastAPI** — production-ready REST API with auto-generated docs
 
 ---
 
@@ -80,19 +87,39 @@ pip install -r requirements.txt
 Create a `.env` file in the root:
 
 ```env
+# LLM
 GROQ_API_KEY=your_groq_api_key
-BRAVE_SEARCH_API_KEY=your_brave_api_key
+
+# Vector DB
+DATABASE_URL=postgresql://user:password@host/dbname?sslmode=require
+NEON_HOST=your_neon_host
+NEON_DATABASE=your_db_name
+NEON_USER=your_user
+NEON_PASSWORD=your_password
+
+# Financial APIs
+TWELVE_DATA_API_KEY=your_twelve_data_key
+
+# Tracing (optional)
 LANGCHAIN_TRACING_V2=true
-LANGCHAIN_API_KEY=your_langsmith_api_key
+LANGCHAIN_API_KEY=your_langsmith_key
 LANGSMITH_PROJECT=CFOBuddy
 ```
 
 Get your API keys:
 - **Groq** (free): [console.groq.com](https://console.groq.com)
-- **Brave Search** (free, 2000 req/month): [brave.com/search/api](https://brave.com/search/api)
-- **LangSmith** (optional, for tracing): [smith.langchain.com](https://smith.langchain.com)
+- **Neon DB** (free): [neon.tech](https://neon.tech)
+- **Twelve Data** (free, 800 req/day): [twelvedata.com](https://twelvedata.com)
+- **LangSmith** (optional): [smith.langchain.com](https://smith.langchain.com)
 
-### 5. Add your data files
+### 5. Enable pgvector on Neon
+
+In your Neon dashboard SQL editor run:
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+```
+
+### 6. Add your data files
 
 Drop your files into the `data/` folder. Supported formats:
 
@@ -103,7 +130,7 @@ Drop your files into the `data/` folder. Supported formats:
 | Excel | `.xlsx`, `.xls` |
 | Word | `.docx` |
 
-### 6. Build the FAISS index
+### 7. Build the index
 
 Run this **once** (or whenever you add/change files in `data/`):
 
@@ -111,10 +138,16 @@ Run this **once** (or whenever you add/change files in `data/`):
 python build_index.py
 ```
 
-### 7. Run CFO Buddy
+### 8. Run CFO Buddy
 
+**CLI:**
 ```bash
-python main.py
+python app.py
+```
+
+**API:**
+```bash
+uvicorn api.app:app --reload --port 8000
 ```
 
 ---
@@ -124,22 +157,36 @@ python main.py
 ```
 ==================================================
   CFO Buddy — Ready!
-  Type 'exit' to quit.
+  Type 'exit' or 'stop' to quit.
   Type 'threads' to see past conversations.
 ==================================================
 
-Thread ID (press Enter for 'main'): 
-Using thread: main
+Session ID: 3f7a1c2d-...
 
+You: what was Zomato revenue in Q3FY25?
+CFO Buddy: Consolidated Adjusted Revenue grew 58% YoY to INR 5,746 crore...
+
+You: AAPL stock price
+CFO Buddy: Apple Inc. (AAPL) — Price: $213.49 | Market Cap: $3.21T...
+
+You: find card id 4524
+CFO Buddy: Found 1 record in cards_data.csv...
 ```
 
-### Resume a previous conversation
+---
 
-Each conversation is saved by `thread_id`. To resume:
+## API Endpoints
 
-```
-Thread ID (press Enter for 'main'): analysis_q3
-```
+| Method | URL | Description |
+|--------|-----|-------------|
+| `GET` | `/` | API info |
+| `GET` | `/health` | Health check |
+| `POST` | `/chat` | Send message |
+| `GET` | `/threads` | List all threads |
+| `GET` | `/files` | List data files |
+| `POST` | `/upload` | Upload a file |
+
+Auto-generated docs at **http://localhost:8000/docs**
 
 ---
 
@@ -148,23 +195,41 @@ Thread ID (press Enter for 'main'): analysis_q3
 ```
 [START]
    │
-   ▼
-[upload_node]     ← placeholder for future file upload feature
+[upload_node]     ← future file upload handling
    │
-   ▼
-[model]           ← Groq LLM decides what to do
+   ├── finance keywords? ──► [finance_node] ⟷ [finance_tools]
+   │                               │
+   │                              END
    │
-   ├── tool call? ──► [tools] ──► back to [model]
-   │
-   └── no tool ──► [END]
+   └── internal query? ──► [model] ⟷ [internal_tools]
+                               │
+                              END
 ```
+
+---
 
 ## Tools
 
-| Tool | Description |
-|------|-------------|
-| `search_financial_docs` | Semantic search across all indexed files |
-| `exact_lookup` | Exact match by column value in CSV files |
-| `list_available_files` | Lists all files and CSV columns |
-| `brave_search` | Live web search via Brave API |
+| Tool | Source | Description |
+|------|--------|-------------|
+| `search_financial_docs` | LlamaIndex + Neon | Semantic search across uploaded files |
+| `exact_lookup` | pandas | Exact match by column value in CSVs |
+| `list_available_files` | local | Lists all files and CSV columns |
+| `get_financial_data` | yfinance + Twelve Data | Live stock quotes, financials, news |
+| `generate_chart` | Plotly | Auto-generates charts from data |
+| `brave_search` | DuckDuckGo | Real-time web search |
 
+---
+
+## Roadmap
+
+- [ ] Next.js frontend
+- [ ] Per-user vector stores for uploads
+- [ ] Streaming responses
+- [ ] Multi-user authentication
+
+---
+
+## License
+
+MIT
