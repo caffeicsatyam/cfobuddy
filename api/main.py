@@ -1,15 +1,25 @@
+import asyncio
 import os
 import json
-from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File
+from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Depends, Security
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import BackgroundTasks
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from langchain_core.messages import HumanMessage 
 from build_index import build_index         
 from pydantic import BaseModel
 from typing import Optional
 from dotenv import load_dotenv
+from cfobuddy_logging import configure_logging
 
 load_dotenv()
+
+logger = configure_logging()
+
+EXPECTED_API_KEY = os.getenv("CFO_BUDDY_API_KEY")
+if not EXPECTED_API_KEY:
+    logger.error("CFO_BUDDY_API_KEY is not set; refusing to start.")
+    raise RuntimeError("CFO_BUDDY_API_KEY is not set")
 
 app = FastAPI(
     title="CFO Buddy API",
@@ -25,7 +35,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-router = APIRouter()
+api_key_scheme = HTTPBearer(auto_error=False)
+
+
+def require_api_key(
+    credentials: HTTPAuthorizationCredentials = Security(api_key_scheme),
+):
+    if credentials is None or credentials.scheme.lower() != "bearer":
+        raise HTTPException(status_code=401, detail="Invalid API key")
+
+    token = credentials.credentials
+    if not token or token != EXPECTED_API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid API key")
+
+    return token
+
+
+router = APIRouter(dependencies=[Depends(require_api_key)])
 
 DATA_FOLDER = "data"
 ALLOWED_EXTENSIONS = {"csv", "pdf", "xlsx", "xls", "docx"}
@@ -134,9 +160,12 @@ async def chat(request: ChatRequest):
     from core import CFOBuddy
     config = {"configurable": {"thread_id": request.thread_id}}
     try:
-        response = CFOBuddy.invoke(
+        # LangGraph invoke is synchronous; run it in a thread to avoid
+        # blocking the FastAPI event loop.
+        response = await asyncio.to_thread(
+            CFOBuddy.invoke,
             {"messages": [HumanMessage(content=request.message)]},
-            config=config
+            config=config,
         )
         text, chart = parse_response(response["messages"])
         return ChatResponse(response=text, thread_id=request.thread_id, chart=chart)

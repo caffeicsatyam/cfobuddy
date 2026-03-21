@@ -10,7 +10,7 @@ from tools import all_tools
 from tools.finance import get_financial_data
 from tools.search import search_financial_docs
 from tools.lookup import exact_lookup, list_available_files
-from tools.web_search import brave_search
+from tools.web_search import web_search
 
 # ==========================
 # SYSTEM PROMPTS
@@ -63,37 +63,16 @@ Always:
 - For most up-to-date real-time price → use 'realtime'
 """)
 
-# SUMMARY_PROMPT = """
-# You are a financial data presenter. Your ONLY job is to present the retrieved data clearly.
 
-# STRICT RULES — NEVER BREAK THESE:
-# - NEVER change, modify, round, or recalculate any numbers
-# - NEVER add information that is not in the retrieved data
-# - NEVER guess, infer, or hallucinate missing data
-# - NEVER calculate percentages, ratios, or derived metrics yourself
-# - Copy ALL financial figures EXACTLY as they appear in the source
-# - If data is not found, say "Data not found in the provided documents"
-# - Do NOT add recommendations, conclusions, or opinions unless explicitly asked
-
-# FORMATTING RULES:
-# - For PDF/narrative data: present as clean bullet points preserving exact numbers
-# - For CSV/tabular data: present as a neat labeled list or table
-# - For stock/API data: present with proper units (₹, $, B, M, %)
-# - Always mention the source at the end e.g. (Source: zomato_shareholder_letter.pdf)
-# - Keep response concise — only include what was asked
-
-# Response to present:
-# {response}
-# """
 
 # ==========================
 # TOOL SETS
 # ==========================
 
-Basic_tools = [search_financial_docs, exact_lookup, list_available_files, brave_search]
-internal_tool_node = ToolNode(Basic_tools)
+basic_tools = [search_financial_docs, exact_lookup, list_available_files, web_search]
+internal_tool_node = ToolNode(basic_tools)
 
-finance_tools = [get_financial_data,  brave_search]
+finance_tools = [get_financial_data,  web_search]
 finance_tool_node = ToolNode(finance_tools)
 
 # ==========================
@@ -173,28 +152,6 @@ def finance_node(state: State):
     response = llm_finance.invoke(messages)
     return {"messages": [response]}
 
-
-# def summarize_node(state: State):
-#     """Summarize only if response contains actual financial data."""
-#     last_message = state["messages"][-1]
-#     content = last_message.content
-
-#     # Skip summarizing short or conversational responses
-#     financial_indicators = [
-#         "$", "revenue", "profit", "loss", "ratio", "income",
-#         "balance", "cash", "equity", "assets", "earnings", "pe",
-#         "quarter", "annual", "billion", "million", "source:"
-#     ]
-
-#     is_financial = any(kw in content.lower() for kw in financial_indicators)
-#     is_long = len(content) > 300
-
-#     if not (is_financial and is_long):
-#         return state  # pass through unchanged
-
-#     prompt = SUMMARY_PROMPT.format(response=content)
-#     summary = llm.invoke(prompt)
-#     return {"messages": [summary]}
 
 # ==========================
 # BUILD GRAPH

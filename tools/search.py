@@ -5,8 +5,10 @@ from langchain_core.tools import tool
 from llama_index.core import VectorStoreIndex, StorageContext, Settings
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.vector_stores.postgres import PGVectorStore
+from cfobuddy_logging import configure_logging
 
 load_dotenv()
+logger = configure_logging()
 
 # ==========================
 # EMBEDDING MODEL
@@ -42,7 +44,7 @@ def reload_index():
     """Refresh in-memory index after rebuild."""
     global index
     index = load_index()
-    print("Index reloaded from Neon DB.")
+    logger.info("Index reloaded from Neon DB.")
 
 
 # ==========================
@@ -56,7 +58,7 @@ def search_financial_docs(query: str) -> str:
     similarity. Best for general questions, summaries, and keyword-based queries
     about internal CSV, PDF, Excel, or Word files.
     """
-    retriever = index.as_retriever(similarity_top_k=10)
+    retriever = index.as_retriever(similarity_top_k=10, similarity_cutoff=0.7)
     nodes = retriever.retrieve(query)
 
     if not nodes:

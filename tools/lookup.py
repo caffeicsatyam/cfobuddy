@@ -2,6 +2,9 @@ import os
 import glob
 import pandas as pd
 from langchain_core.tools import tool
+from cfobuddy_logging import configure_logging
+
+logger = configure_logging()
 
 def load_dataframes(folder="data"):
     dataframes = {}
@@ -12,7 +15,7 @@ def load_dataframes(folder="data"):
             df.columns = df.columns.str.strip().str.lower()
             dataframes[filename] = df
         except Exception as e:
-            print(f"Warning: Could not load {filename}: {e}")
+            logger.warning("Could not load %s: %s", filename, e)
     return dataframes
 
 dataframes = load_dataframes()

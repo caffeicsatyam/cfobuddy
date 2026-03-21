@@ -2,8 +2,10 @@ from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage
 from core import CFOBuddy, retrieve_all_threads
 import uuid
+from cfobuddy_logging import configure_logging
 
 load_dotenv()
+logger = configure_logging()
 
 # ==========================
 # RESPONSE PARSER
@@ -62,4 +64,5 @@ while True:
         print("\nCFO Buddy:", content, "\n")
 
     except Exception as e:
+        logger.exception("Unhandled error in CLI chat loop")
         print("\nError:", e, "\n")
