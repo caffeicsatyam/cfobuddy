@@ -1,28 +1,72 @@
 import os
+from dotenv import load_dotenv
 from langchain_core.tools import tool
-from langchain_community.vectorstores import FAISS
-from core.embeddings import embeddings
 
-def load_default_vector_store():
-    if not os.path.exists("faiss_index"):
-        raise FileNotFoundError("No FAISS index found. Run: python build_index.py")
-    return FAISS.load_local(
-        "faiss_index",
-        embeddings=embeddings,
-        allow_dangerous_deserialization=True
+from llama_index.core import VectorStoreIndex, StorageContext, Settings
+from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+from llama_index.vector_stores.postgres import PGVectorStore
+from cfobuddy_logging import configure_logging
+
+load_dotenv()
+logger = configure_logging()
+
+# ==========================
+# EMBEDDING MODEL
+# ==========================
+
+Settings.embed_model = HuggingFaceEmbedding(
+    model_name="sentence-transformers/all-MiniLM-L6-v2",
+    cache_folder="C:/Users/MSI/.cache/huggingface/hub"
+)
+Settings.llm = None
+
+# ==========================
+# LOAD INDEX FROM NEON DB
+# ==========================
+
+def load_index():
+    vector_store = PGVectorStore.from_params(
+        host=os.getenv("NEON_HOST"),
+        database=os.getenv("NEON_DATABASE"),
+        user=os.getenv("NEON_USER"),
+        password=os.getenv("NEON_PASSWORD"),
+        port="5432",
+        table_name="cfo_buddy_vectors",
+        embed_dim=384,
     )
+    return VectorStoreIndex.from_vector_store(vector_store)
 
-default_vector_store = load_default_vector_store()
+
+index = load_index()
+
+
+def reload_index():
+    """Refresh in-memory index after rebuild."""
+    global index
+    index = load_index()
+    logger.info("Index reloaded from Neon DB.")
+
+
+# ==========================
+# TOOL
+# ==========================
 
 @tool
 def search_financial_docs(query: str) -> str:
     """
     Search across all financial and customer data documents using semantic
-    similarity. Best for general questions, summaries, and keyword-based queries.
+    similarity. Best for general questions, summaries, and keyword-based queries
+    about internal CSV, PDF, Excel, or Word files.
     """
-    docs = default_vector_store.similarity_search(query, k=5)
+    retriever = index.as_retriever(similarity_top_k=10, similarity_cutoff=0.7)
+    nodes = retriever.retrieve(query)
+
+    if not nodes:
+        return "No relevant documents found."
+
     formatted = []
-    for i, doc in enumerate(docs):
-        source = doc.metadata.get("source_file", doc.metadata.get("source", "unknown"))
-        formatted.append(f"[Source: {source}]\n{doc.page_content}")
+    for i, node in enumerate(nodes):
+        source = node.metadata.get("file_name", "unknown")
+        formatted.append(f"[Source: {source}]\n{node.get_content()}")
+
     return "\n\n".join(formatted)
