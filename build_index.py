@@ -12,7 +12,6 @@ logger = configure_logging()
 
 DATA_FOLDER = "data"
 
-
 def build_index():
     """Build and store vectors in Neon DB."""
 
