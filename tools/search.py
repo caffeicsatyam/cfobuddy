@@ -15,8 +15,7 @@ logger = configure_logging()
 # ==========================
 
 Settings.embed_model = HuggingFaceEmbedding(
-    model_name="sentence-transformers/all-MiniLM-L6-v2",
-    cache_folder="C:/Users/MSI/.cache/huggingface/hub"
+    model_name="sentence-transformers/all-MiniLM-L6-v2"
 )
 Settings.llm = None
 

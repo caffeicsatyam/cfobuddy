@@ -1,3 +1,4 @@
+from tools.chart import generate_chart
 from tools.search import search_financial_docs
 from tools.lookup import exact_lookup, list_available_files
 from tools.web_search import web_search
@@ -12,4 +13,5 @@ all_tools = [
     get_financial_data,         # live market data
     sql_query,                  # exact SQL on Neon
     list_tables,                # list DB tables
+    generate_chart              # generate charts from data
 ]

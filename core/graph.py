@@ -12,6 +12,7 @@ from tools.search import search_financial_docs
 from tools.lookup import exact_lookup, list_available_files
 from tools.web_search import web_search
 from tools.sql import sql_query, list_tables
+from tools.chart import generate_chart
 
 # ==========================
 # SYSTEM PROMPTS
@@ -31,7 +32,8 @@ Tools available:
 5. list_available_files — see what files are available
 6. web_search — search the web for news and general queries via DuckDuckGo
 7. get_financial_data — live stock data (yfinance + Twelve Data):
-   use data_type: 'quote' 'income' 'balance' 'cashflow' 'metrics' 'ratings' 'news' 'profile' 'history' 'realtime'
+   use data_type: 'quote' 'income' 'balance' 'cashflow' 'metrics' 'ratings' 'news' 'profile' 'history' 'realtime' for other stocks and finanance data.
+8. generate_chart — create charts from data (for future use)
 
 Routing rules:
 - For greetings, thanks, or casual conversation → respond directly, NO tools
@@ -44,6 +46,8 @@ Routing rules:
 - Current news or general web queries → web_search
 - When user mentions a specific file (e.g. 'from zomato.pdf') → ALWAYS use search_financial_docs
 - After retrieving data with any tool → always summarize clearly, never dump raw output
+- For financial data, ALWAYS present numbers with units (B for billions, M for millions) and highlight key insights.
+- Apply the Generate Chart tool for any data that involves trends over time or comparisons, to visualize insights effectively.
 """)
 
 FINANCE_PROMPT = SystemMessage(content="""
@@ -60,16 +64,17 @@ Always:
 - Compare periods when multiple results are returned
 - For price history → use 'history' with appropriate limit
 - For most up-to-date real-time price → use 'realtime'
+- apply the Generate Chart tool for any data that involves trends over time or comparisons, to visualize insights effectively.
 """)
 
 # ==========================
 # TOOL SETS
 # ==========================
 
-basic_tools = [search_financial_docs, exact_lookup, list_available_files, web_search, sql_query, list_tables]
+basic_tools = [search_financial_docs, exact_lookup, list_available_files, web_search, sql_query, list_tables, generate_chart]
 internal_tool_node = ToolNode(basic_tools)
 
-finance_tools = [get_financial_data, web_search]
+finance_tools = [get_financial_data, web_search, generate_chart]
 finance_tool_node = ToolNode(finance_tools)
 
 # ==========================
@@ -89,22 +94,22 @@ def route_after_upload(state: State):
 
     router_prompt = f"""You are a query router. Classify this query into one of two categories:
 
-1. "finance_node" - ONLY for live market data queries:
-   - Real-time stock prices, quotes
-   - Live market cap, PE ratio
-   - Current analyst ratings
-   - Stock news from today
+    1. "finance_node" - ONLY for live market data queries:
+    - Real-time stock prices, quotes
+    - Live market cap, PE ratio
+    - Current analyst ratings
+    - Stock news from today
 
-2. "model" - For everything else:
-   - Questions about uploaded documents (PDFs, CSVs)
-   - Historical financial data from internal files
-   - Customer/account data lookups
-   - Math, aggregations, calculations on internal data
-   - General financial questions
+    2. "model" - For everything else:
+    - Questions about uploaded documents (PDFs, CSVs)
+    - Historical financial data from internal files
+    - Customer/account data lookups
+    - Math, aggregations, calculations on internal data
+    - General financial questions
 
-Query: {last_message.content}
+    Query: {last_message.content}
 
-Reply with ONLY "finance_node" or "model". Nothing else."""
+    Reply with ONLY "finance_node" or "model". Nothing else."""
 
     response = llm.invoke(router_prompt)
     decision = response.content.strip().lower()

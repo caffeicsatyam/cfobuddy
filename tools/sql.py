@@ -8,13 +8,11 @@ load_dotenv()
 
 engine = create_engine(os.getenv("DATABASE_URL"))
 
-
 def get_available_tables() -> dict:
     """Get all tables and their columns from Neon."""
     inspector = inspect(engine)
     tables = {}
     for table_name in inspector.get_table_names():
-        # Skip vector store tables
         if "embed" in table_name or "vector" in table_name or "llamaindex" in table_name:
             continue
         columns = [col["name"] for col in inspector.get_columns(table_name)]
@@ -95,7 +93,7 @@ def list_tables() -> str:
 
         result = ["Available tables in Neon DB:\n"]
         for table_name, columns in tables.items():
-            result.append(f"📋 {table_name}")
+            result.append(f" {table_name}")
             result.append(f"   Columns: {', '.join(columns)}\n")
 
         return "\n".join(result)

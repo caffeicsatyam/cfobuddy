@@ -7,3 +7,14 @@ langgraph==1.1.1
 pandas==3.0.1
 python-dotenv==1.2.2
 typing_extensions==4.15.0
+fastapi
+uvicorn
+python-multipart
+llama-index
+llama-index-vector-stores-postgres
+llama-index-embeddings-huggingface
+yfinance
+twelvedata
+psycopg2-binary
+SQLAlchemy
+pymupdf
