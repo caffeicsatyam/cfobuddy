@@ -36,16 +36,8 @@ Thumbs.db
 
 # Misc
 skills-lock.json
-req.txt          # ← looks like a duplicate of requirements.txt
+req.txt          
 
-# Static/Templates (optional — remove if you want these in repo)
 static/
 templates/
 
-# Frontend
-node_modules/
-frontend/node_modules/
-frontend/.next/
-frontend/out/
-frontend/.env*.local
-frontend/.vercel/

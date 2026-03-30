@@ -1,8 +1,10 @@
 import os
+
 import yfinance as yf
 from twelvedata import TDClient
 from langchain_core.tools import tool
 from dotenv import load_dotenv
+from typing import Union
 
 load_dotenv()
 
@@ -84,15 +86,15 @@ def _yf_cashflow(symbol: str, limit: int) -> str:
     df = yf.Ticker(symbol).cashflow
     if df is None or df.empty:
         return f"No cash flow found for {symbol}."
-    result = [f"💰 Cash Flow — {symbol}"]
+    result = [f" Cash Flow — {symbol}"]
     for col in list(df.columns)[:limit]:
         result.append(f"""
-Period:         {str(col)[:10]}
-Operating CF:   {format_number(df[col].get('Operating Cash Flow'))}
-Investing CF:   {format_number(df[col].get('Investing Cash Flow'))}
-Financing CF:   {format_number(df[col].get('Financing Cash Flow'))}
-Free CF:        {format_number(df[col].get('Free Cash Flow'))}
-CapEx:          {format_number(df[col].get('Capital Expenditure'))}""")
+        Period:         {str(col)[:10]}
+        Operating CF:   {format_number(df[col].get('Operating Cash Flow'))}
+        Investing CF:   {format_number(df[col].get('Investing Cash Flow'))}
+        Financing CF:   {format_number(df[col].get('Financing Cash Flow'))}
+        Free CF:        {format_number(df[col].get('Free Cash Flow'))}
+        CapEx:          {format_number(df[col].get('Capital Expenditure'))}""")
     return "\n---".join(result)
 
 
@@ -102,16 +104,16 @@ def _yf_metrics(symbol: str) -> str:
         return f"No metrics found for {symbol}."
     return f"""
     Key Metrics — {symbol}
-PE Ratio:       {info.get('trailingPE', 'N/A')}
-Forward PE:     {info.get('forwardPE', 'N/A')}
-PB Ratio:       {info.get('priceToBook', 'N/A')}
-EV/EBITDA:      {info.get('enterpriseToEbitda', 'N/A')}
-ROE:            {info.get('returnOnEquity', 'N/A')}
-ROA:            {info.get('returnOnAssets', 'N/A')}
-Net Margin:     {info.get('profitMargins', 'N/A')}
-Current Ratio:  {info.get('currentRatio', 'N/A')}
-Debt/Equity:    {info.get('debtToEquity', 'N/A')}
-Dividend Yield: {info.get('dividendYield', 'N/A')}""".strip()
+    PE Ratio:       {info.get('trailingPE', 'N/A')}
+    Forward PE:     {info.get('forwardPE', 'N/A')}
+    PB Ratio:       {info.get('priceToBook', 'N/A')}
+    EV/EBITDA:      {info.get('enterpriseToEbitda', 'N/A')}
+    ROE:            {info.get('returnOnEquity', 'N/A')}
+    ROA:            {info.get('returnOnAssets', 'N/A')}
+    Net Margin:     {info.get('profitMargins', 'N/A')}
+    Current Ratio:  {info.get('currentRatio', 'N/A')}
+    Debt/Equity:    {info.get('debtToEquity', 'N/A')}
+    Dividend Yield: {info.get('dividendYield', 'N/A')}""".strip()
 
 
 def _yf_ratings(symbol: str) -> str:
@@ -119,7 +121,7 @@ def _yf_ratings(symbol: str) -> str:
         recs = yf.Ticker(symbol).recommendations
         if recs is None or recs.empty:
             raise ValueError("empty")
-        result = [f"🎯 Analyst Ratings — {symbol}"]
+        result = [f" Analyst Ratings — {symbol}"]
         for _, row in recs.tail(5).iterrows():
             result.append(
                 f"{str(row.name)[:10]} | {row.get('Firm', 'N/A')} | "
@@ -227,7 +229,7 @@ HANDLERS = {
 # ==========================
 
 @tool
-def get_financial_data(symbol: str, data_type: str, period: str = "annual", limit: int = 3) -> str:
+def get_financial_data(symbol: str, data_type: str, period: str = "annual", limit: Union[int, str] = 3) -> str:
     """
     Fetch any financial data for a publicly traded company.
     Uses yfinance (fundamentals) and Twelve Data (price history & real-time).
@@ -250,6 +252,8 @@ def get_financial_data(symbol: str, data_type: str, period: str = "annual", limi
     """
     symbol = symbol.upper().strip()
     data_type = data_type.lower().strip()
+    limit = int(limit)  # coerce here
+    period = str(period)
 
     if data_type not in HANDLERS:
         return (

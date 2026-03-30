@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from typing import Optional
 from dotenv import load_dotenv
 from cfobuddy_logging import configure_logging
+from load_data import load_csvs_to_neon
 
 load_dotenv()
 
@@ -22,7 +23,7 @@ if not EXPECTED_API_KEY:
     raise RuntimeError("CFO_BUDDY_API_KEY is not set")
 
 app = FastAPI(
-    title="CFO Buddy API",
+    title="CFOBuddy AI",
     description="AI Powered Financial Assistant API",
     version="1.0.0"
 )
@@ -50,6 +51,17 @@ def require_api_key(
 
     return token
 
+# Global variable to track indexing status
+indexing_status = {"status": "ready", "message": "........"}
+def build_index_with_status():
+    global indexing_status
+    indexing_status = {"status": "indexing", "message": "Building index"}
+    try:
+        build_index()
+        indexing_status = {"status" : "ready", "message": "Index built successfully"}
+    except Exception as e:
+        indexing_status = {"status": "error", "message": str(e)}
+    
 
 router = APIRouter(dependencies=[Depends(require_api_key)])
 
@@ -133,18 +145,6 @@ def parse_response(messages):
 # ROUTES
 # ==========================
 
-@router.post("/upload")
-async def upload_file(file: UploadFile, background_tasks: BackgroundTasks):
-    # Save file first
-    filepath = os.path.join(DATA_FOLDER, file.filename)
-    with open(filepath, "wb") as f:
-        f.write(await file.read())
-    
-    # Rebuild index in background — user doesn't wait
-    background_tasks.add_task(build_index)
-    
-    return {"message": "File uploaded! Indexing in progress...", "filename": file.filename}
-
 @router.get("/threads", response_model=ThreadResponse)
 async def get_threads():
     from core.memory import retrieve_all_threads
@@ -186,19 +186,61 @@ async def list_files():
     return FileResponse(files=files)
 
 
+#Uploading the file and building the index can take some time, so we run build_index in the background after a file is uploaded. This way, the user gets an immediate response that their file was received, and the indexing happens asynchronously without blocking the API.
 @router.post("/upload", response_model=UploadResponse)
-async def upload_file(file: UploadFile = File(...)):
-    if not file.filename:
-        raise HTTPException(status_code=400, detail="No file selected")
-    ext = file.filename.rsplit(".", 1)[-1].lower()
-    if ext not in ALLOWED_EXTENSIONS:
-        raise HTTPException(status_code=400, detail=f"Supported types: {', '.join(ALLOWED_EXTENSIONS)}")
-    os.makedirs(DATA_FOLDER, exist_ok=True)
+async def upload_file(file: UploadFile, background_tasks: BackgroundTasks):
+    
     filepath = os.path.join(DATA_FOLDER, file.filename)
     content = await file.read()
     with open(filepath, "wb") as f:
         f.write(content)
-    return UploadResponse(message=f"'{file.filename}' uploaded!", filename=file.filename)
+
+    ext = os.path.splitext(file.filename)[1].lower()
+
+    if ext == ".csv":
+        logger.info("CSV file uploaded!")
+        background_tasks.add_task(load_csvs_to_neon)
+        background_tasks.add_task(build_index_with_status)
+
+    else:
+        logger.info("File uploaded: %s | type: %s | size: %.1f KB", file.filename, ext, len(content)/1024)
+        background_tasks.add_task(build_index_with_status)
+
+    return UploadResponse(
+        message= f" '{file.filename}' uploaded Successfully!",
+        filename=file.filename
+    )
+
+@router.get("/threads/{thread_id}/history")
+async def get_history(thread_id: str):
+    from core import CFOBuddy
+    config = {"configurable": {"thread_id": thread_id}}
+    try:
+        state = CFOBuddy.get_state(config)
+        messages = state.values.get("messages", [])
+        return {
+            "thread_id": thread_id,
+            "messages": [
+                {
+                    "role": msg.type,
+                    "content": msg.content if isinstance(msg.content, str) else str(msg.content)
+                }
+                for msg in messages
+                if msg.type in ["human", "ai"]
+            ]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    
+@router.get("/indexing_status")
+async def get_indexing_status():
+    return indexing_status
 
 
-app.include_router(router)
+@app.route('/charts/<filename>')
+def serve_chart(filename):
+    """Serve chart images."""
+    chart_path = Path("static/charts") / filename
+    if chart_path.exists():
+        return send_file(chart_path, mimetype='image/png')
+    return "Chart not found", 404

@@ -1,6 +1,7 @@
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage
-from core import CFOBuddy, retrieve_all_threads
+from core.graph import CFOBuddy  
+from core.memory import retrieve_all_threads  
 import uuid
 from cfobuddy_logging import configure_logging
 
@@ -36,7 +37,7 @@ print("=" * 50 + "\n")
 
 # New thread every session
 thread_id = str(uuid.uuid4())
-config = {"configurable": {"thread_id": thread_id}}
+config = {"configurable": {"thread_id": thread_id}, "recursion_limit": 25}
 print(f"Session ID: {thread_id}\n")
 
 while True:

@@ -1,0 +1,105 @@
+.bubble {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 0.25rem;
+}
+.ai { flex-direction: row; }
+
+.avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--tertiary-container);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.875rem;
+  color: var(--on-tertiary-container);
+  flex-shrink: 0;
+}
+
+.typingContent {
+  background: var(--tertiary-container);
+  border-radius: 0.5rem 1rem 1rem 0.5rem;
+  padding: 0.875rem 1rem;
+}
+
+.typingDots {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Skeleton */
+.skeletonWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1rem 1.25rem;
+}
+.skeletonLine {
+  height: 14px;
+  border-radius: 0.375rem;
+}
+
+.threadSkeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+}
+.skeletonThread {
+  height: 12px;
+  border-radius: 0.375rem;
+}
+
+.fileSkeleton { display: flex; flex-direction: column; gap: 0.75rem; }
+.fileSkeletonRow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.skeletonIcon {
+  width: 36px;
+  height: 36px;
+  border-radius: 0.5rem;
+  flex-shrink: 0;
+}
+
+/* Spinner */
+.spinner {
+  display: inline-block;
+  border: 2px solid rgba(107, 216, 203, 0.2);
+  border-top-color: var(--secondary);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Error banner */
+.errorBanner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: rgba(147, 0, 10, 0.2);
+  border: 1px solid rgba(255, 180, 171, 0.2);
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
+  color: var(--error);
+  font-size: 0.875rem;
+}
+.errorIcon { font-size: 1rem; flex-shrink: 0; }
+.retryBtn {
+  margin-left: auto;
+  background: none;
+  border: 1px solid var(--error);
+  color: var(--error);
+  border-radius: 0.5rem;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+.retryBtn:hover { background: rgba(255, 180, 171, 0.1); }
