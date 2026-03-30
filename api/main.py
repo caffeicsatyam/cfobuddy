@@ -237,4 +237,10 @@ async def get_indexing_status():
     return indexing_status
 
 
-app.include_router(router)
+@app.route('/charts/<filename>')
+def serve_chart(filename):
+    """Serve chart images."""
+    chart_path = Path("static/charts") / filename
+    if chart_path.exists():
+        return send_file(chart_path, mimetype='image/png')
+    return "Chart not found", 404

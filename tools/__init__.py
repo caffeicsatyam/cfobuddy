@@ -1,17 +1,85 @@
-from tools.chart import generate_chart
+from tools.chart import generate_chart, prepare_chart_data  # ← Remove list_charts
 from tools.search import search_financial_docs
 from tools.lookup import exact_lookup, list_available_files
 from tools.web_search import web_search
 from tools.finance import get_financial_data
-from tools.sql import sql_query, list_tables
+from tools.sql import sql_query, list_tables, get_sql_examples
+from langgraph.prebuilt import ToolNode  
 
 all_tools = [
-    search_financial_docs,      # semantic search over PDFs/docs
-    exact_lookup,               # exact CSV row lookup
-    list_available_files,       # list files
-    web_search,                     # web search for news, stock prices, etc.
-    get_financial_data,         # live market data
-    sql_query,                  # exact SQL on Neon
-    list_tables,                # list DB tables
-    generate_chart              # generate charts from data
+    search_financial_docs, 
+    exact_lookup, 
+    list_available_files, 
+    web_search, 
+    get_financial_data, 
+    sql_query, 
+    list_tables, 
+    get_sql_examples,
+    generate_chart,
+    prepare_chart_data
+    # list_charts removed
+]
+
+# ==========================
+# SPECIALIZED TOOL SETS
+# ==========================
+
+# Web search tools
+web_search_tools = [web_search]
+web_search_tool_node = ToolNode(web_search_tools)
+
+# Basic internal tools (documents, files, charts)
+basic_tools = [
+    search_financial_docs, 
+    exact_lookup, 
+    list_available_files, 
+    generate_chart, 
+    prepare_chart_data
+]
+internal_tool_node = ToolNode(basic_tools)
+
+sql_tools_list = [
+    sql_query, 
+    list_tables, 
+    get_sql_examples, 
+    generate_chart, 
+    prepare_chart_data
+]
+sql_tool_node = ToolNode(sql_tools_list)
+
+# Finance tools (market data + visualization)
+finance_tools = [
+    get_financial_data, 
+    generate_chart, 
+    prepare_chart_data
+]
+finance_tool_node = ToolNode(finance_tools)
+
+# Export for use in graph.py
+__all__ = [
+    # Individual tools
+    'search_financial_docs',
+    'exact_lookup',
+    'list_available_files',
+    'web_search',
+    'get_financial_data',
+    'sql_query',
+    'list_tables',
+    'get_sql_examples',
+    'generate_chart',
+    'prepare_chart_data',
+    # 'list_charts' removed
+    
+    # Tool collections
+    'all_tools',
+    'web_search_tools',
+    'basic_tools',
+    'sql_tools_list',
+    'finance_tools',
+    
+    # Tool nodes
+    'web_search_tool_node',
+    'internal_tool_node',
+    'sql_tool_node',
+    'finance_tool_node'
 ]

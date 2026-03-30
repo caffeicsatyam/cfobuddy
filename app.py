@@ -1,6 +1,7 @@
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage
-from core import CFOBuddy, retrieve_all_threads
+from core.graph import CFOBuddy  
+from core.memory import retrieve_all_threads  
 import uuid
 from cfobuddy_logging import configure_logging
 
