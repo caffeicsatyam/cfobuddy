@@ -191,18 +191,19 @@ Auto-generated docs at **http://localhost:8000/docs**
 
 ## Agent Architecture
 
-```
+```text
 [START]
    │
-[upload_node]     ← future file upload handling
+[upload_node] (future file upload handling)
    │
-   ├── finance keywords? ──► [finance_node] ⟷ [finance_tools]
-   │                               │
-   │                              END
-   │
-   └── internal query? ──► [model] ⟷ [internal_tools]
-                               │
-                              END
+   └── route_after_upload (Fast Semantic Routing)
+         ├── [model] ⟷ [internal_tools] ──► END
+         │
+         ├── [sql_node] ⟷ [sql_tools] ──► END
+         │
+         ├── [finance_node] ⟷ [finance_tools] ──► END
+         │
+         └── [web_search_node] ⟷ [web_search_tools] ──► END
 ```
 
 ---
@@ -222,9 +223,10 @@ Auto-generated docs at **http://localhost:8000/docs**
 
 ## Roadmap
 
-- [ ] Next.js frontend
+- [x] Fast Semantic LLM Router
+- [x] Multi-agent Graph Architecture (SQL, Finance, Web)
+- [x] Next.js frontend integration
 - [ ] Per-user vector stores for uploads
-- [ ] Streaming responses
 - [ ] Multi-user authentication
 
 ---
