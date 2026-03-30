@@ -1,8 +1,6 @@
 import os
 from dotenv import load_dotenv
-# from langchain_groq import ChatGroq
-from langchain_nvidia_ai_endpoints import ChatNVIDIA
-# from langchain_huggingface import HuggingFaceEndpoint, ChatHuggingFace
+from langchain_groq import ChatGroq
 
 load_dotenv()
 
@@ -22,18 +20,18 @@ load_dotenv()
 
 
 # CHATNVIDIA FROM  NVIDIA NMI VIA LANGCHAIN
-llm = ChatNVIDIA(
-  model="meta/llama-3.3-70b-instruct",
-  api_key=os.getenv("NVIDIA_API_KEY"), 
-  temperature=0.1,
-  top_p=0.7,
-  max_tokens=1024,
-)
+# llm = ChatNVIDIA(
+#   model="meta/llama-3.3-70b-instruct",
+#   api_key=os.getenv("NVIDIA_API_KEY"), 
+#   temperature=0.1,
+#   top_p=0.7,
+#   max_tokens=1024,
+# )
 
 
 # Chat Groq from LANGCHAIN
-# llm = ChatGroq(
-#     model="llama-3.1-8b-instant",
-#     temperature=0.01,
-# )
+llm = ChatGroq(
+    model="llama-3.1-8b-instant",
+    temperature=0.01,
+)
 

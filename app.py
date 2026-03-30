@@ -37,7 +37,7 @@ print("=" * 50 + "\n")
 
 # New thread every session
 thread_id = str(uuid.uuid4())
-config = {"configurable": {"thread_id": thread_id}}
+config = {"configurable": {"thread_id": thread_id}, "recursion_limit": 25}
 print(f"Session ID: {thread_id}\n")
 
 while True:

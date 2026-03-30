@@ -34,7 +34,8 @@ basic_tools = [
     exact_lookup, 
     list_available_files, 
     generate_chart, 
-    prepare_chart_data
+    prepare_chart_data,
+    sql_query
 ]
 internal_tool_node = ToolNode(basic_tools)
 
@@ -51,7 +52,8 @@ sql_tool_node = ToolNode(sql_tools_list)
 finance_tools = [
     get_financial_data, 
     generate_chart, 
-    prepare_chart_data
+    prepare_chart_data,
+    sql_query
 ]
 finance_tool_node = ToolNode(finance_tools)
 

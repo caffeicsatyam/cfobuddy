@@ -114,7 +114,6 @@ def sql_query(sql: str) -> str:
     
     Available tables: {get_table_list_inline()}
     """
-    # Safety check — only allow SELECT
     sql_clean = sql.strip().upper()
     if not sql_clean.startswith("SELECT") and not sql_clean.startswith("WITH"):
         return "Only SELECT queries are allowed for safety."
@@ -155,7 +154,7 @@ def list_tables() -> str:
 
         result = ["Available tables in Neon DB:\n"]
         for table_name, columns in tables.items():
-            result.append(f"📊 {table_name}")
+            result.append(f"  {table_name}")
             result.append(f"   Columns: {', '.join(columns)}\n")
 
         return "\n".join(result)

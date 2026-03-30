@@ -30,6 +30,11 @@ def exact_lookup(file_name: str, column: str, value: str) -> str:
         file_name: CSV filename e.g. 'cards_data.csv'
         column: column name to search in e.g. 'client_id', 'id', 'card_number'
         value: exact value to match e.g. '825'
+
+
+    ALWAYS:
+    - If file is NOT tabular, use search_financial_docs instead.
+    - EXCEPT TABULAR FILES, DONT SEARCH FOR VALUES AND COLUMNS.
     """
     if file_name not in dataframes:
         available = ", ".join(dataframes.keys())
@@ -51,9 +56,13 @@ def exact_lookup(file_name: str, column: str, value: str) -> str:
     return f"[Source: {file_name}]\nFound {len(matches)} record(s):\n\n" + "\n\n---\n\n".join(results)
 
 
-@tool
+@tool  
 def list_available_files() -> str:
-    """List all available files in the data folder including CSVs, PDFs, Excel and Word docs."""
+    """List all available files in the data folder including CSVs, PDFs, Excel and Word docs.
+    
+    IMPORTANT: Call this tool ONLY ONCE per conversation. After receiving the file list,
+    use the information to answer the user's question directly. Do NOT call this tool again.
+    """
     DATA_FOLDER = "data"
     SUPPORTED = {".csv", ".pdf", ".xlsx", ".xls", ".docx"}
     result = []

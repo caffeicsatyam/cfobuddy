@@ -76,7 +76,9 @@ SQL_KEYWORDS = frozenset([
     "average", "sum", "count", "total", "calculate", "correlation", "corr",
     "group", "filter", "where", "top", "bottom", "rank", "trend", "aggregate",
     "query", "table", "database", "csv", "mean", "median", "std", "variance",
-    "join", "merge", "pivot", "compare", "analysis", "statistics"
+    "join", "merge", "pivot", "compare", "analysis", "statistics",
+    "pm25", "pm10", "pm2.5", "air quality", "pollution", "sensor", "parameter",
+    "location", "datetime", "value", "units", "measurement"
 ])
 
 FINANCE_KEYWORDS = frozenset([
@@ -135,6 +137,6 @@ def fast_route(query: str) -> str:
     result = route_with_embeddings(query)
     elapsed = (time.time() - start) * 1000
     
-    print(f"🚀 FAST_ROUTE: '{query[:50]}...' → {result} ({elapsed:.2f}ms)")
+    # print(f"FAST_ROUTE: '{query[:50]}...' → {result} ({elapsed:.2f}ms)")
     
     return result
