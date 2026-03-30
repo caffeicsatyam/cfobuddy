@@ -42,3 +42,10 @@ req.txt          # ← looks like a duplicate of requirements.txt
 static/
 templates/
 
+# Frontend
+node_modules/
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.env*.local
+frontend/.vercel/
