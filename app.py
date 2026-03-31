@@ -1,9 +1,11 @@
+
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage
 from core.graph import CFOBuddy  
 from core.memory import retrieve_all_threads  
 import uuid
 from cfobuddy_logging import configure_logging
+from langchain_core.messages.utils import trim_messages, count_tokens_approximately
 
 load_dotenv()
 logger = configure_logging()
@@ -11,6 +13,12 @@ logger = configure_logging()
 # ==========================
 # RESPONSE PARSER
 # ==========================
+
+
+# ===========================
+# MAX TOKENS
+# ============================
+MAX_TOKENS = 150
 
 def parse_response(content):
     if isinstance(content, list):
@@ -35,7 +43,7 @@ print("  Type 'exit' or 'stop' to quit.")
 print("  Type 'threads' to see past conversations.")
 print("=" * 50 + "\n")
 
-# New thread every session
+
 thread_id = str(uuid.uuid4())
 config = {"configurable": {"thread_id": thread_id}, "recursion_limit": 25}
 print(f"Session ID: {thread_id}\n")

@@ -1,13 +1,14 @@
 from __future__ import annotations
 from pydantic import BaseModel
-from langchain_core.messages import SystemMessage
+from langchain_core.messages import SystemMessage, HumanMessage
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import tools_condition
 from langsmith import traceable
 from core.schemas import RouterDecision, RouteTarget, State    
 from core.memory import checkpointer
 from core.llm import llm
-from core.router import fast_route  
+from core.router import fast_route 
+from langchain_core.messages import trim_messages 
 from tools import (
     basic_tools,
     finance_tools,
@@ -137,7 +138,6 @@ Always:
     model_config = {"frozen": True}
 
 
-# Instantiate once; nodes reference this object
 _prompts = PromptConfig()
 
 
@@ -179,7 +179,17 @@ def upload_node(state: State) -> dict:
 @traceable(run_type="chain")
 def model_node(state: State) -> dict:
     """Main LLM node — handles internal data queries (non-SQL), not Finance or SQL"""
-    messages = [SystemMessage(content=_prompts.system)] + list(state["messages"])
+
+    trimmed_history = trim_messages(
+        state["messages"],          
+        max_tokens=1500,           
+        strategy="last",           
+        token_counter=llm,         
+        include_system=True        
+    )
+    # messages = [SystemMessage(content=_prompts.system)] + list(state["messages"])
+    
+    messages = [SystemMessage(content=_prompts.system)] + trimmed_history + [HumanMessage(content=state["messages"][-1].content)]
     response = llm_with_tools.invoke(messages)
     return {"messages": [response]}
 
@@ -234,7 +244,7 @@ graph_builder.add_conditional_edges(
     "upload_node",
     route_after_upload,
     {
-        RouteTarget.MODEL.value:      "model",
+        RouteTarget.MODEL.value:    "model",
         RouteTarget.SQL.value:        "sql_node",
                 RouteTarget.FINANCE.value:    "finance_node",
         RouteTarget.WEB_SEARCH.value: "web_search_node",

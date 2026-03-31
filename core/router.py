@@ -7,10 +7,8 @@ from core.schemas import RouteTarget
 # EMBEDDING-BASED ROUTER (Primary)
 # ══════════════════════════════════════════════════════════════════════════════
 
-# Load model once at startup
 _embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
 
-# Route descriptions (these get embedded once)
 ROUTE_DESCRIPTIONS = {
     RouteTarget.SQL.value: """
         Database queries, SQL, calculations, aggregations, averages, sums, counts,
@@ -45,7 +43,7 @@ def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
     return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
 
 
-@lru_cache(maxsize=512)  # Cache routing decisions for repeated queries
+@lru_cache(maxsize=512)  
 def route_with_embeddings(query: str) -> str:
     """
     Route query using sentence transformer embeddings.

@@ -1,6 +1,6 @@
 import os
+import re
 from fastapi import APIRouter, UploadFile, File, HTTPException
-from werkzeug.utils import secure_filename
 
 from api.main import FilesResponse, FileInfo, UploadResponse
 
@@ -10,7 +10,14 @@ DATA_FOLDER="data"
 ALLOWED_EXTENSIONS= {"csv","pdf","xlsx","xls","docx"}
 
 def allowed_file(filename: str) -> bool:
-    return "." in filename and filename.rstrip(".",1)[1].lower() in ALLOWED_EXTENSIONS
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+def _secure_filename(filename: str) -> str:
+    """Simple filename sanitiser (strips path separators and dangerous chars)."""
+    filename = os.path.basename(filename)
+    filename = re.sub(r"[^\w.\-]", "_", filename)
+    return filename or "upload"
 
 
 @router.get("/files", response_model=FilesResponse)
@@ -41,7 +48,7 @@ async def upload_file(file: UploadFile = File(...)):
             detail=f"File type not allowed. Supported: {', '.join(ALLOWED_EXTENSIONS)}"
         )
  
-    filename = secure_filename(file.filename)
+    filename = _secure_filename(file.filename)
     os.makedirs(DATA_FOLDER, exist_ok=True)
  
     filepath = os.path.join(DATA_FOLDER, filename)

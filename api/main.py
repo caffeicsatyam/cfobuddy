@@ -1,12 +1,14 @@
 import asyncio
 import os
 import json
+from pathlib import Path
 from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Depends, Security
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import BackgroundTasks
+from fastapi.responses import FileResponse as StaticFileResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from langchain_core.messages import HumanMessage 
-from build_index import build_index         
+from langchain_core.messages import HumanMessage
+from build_index import build_index
 from pydantic import BaseModel
 from typing import Optional
 from dotenv import load_dotenv
@@ -85,11 +87,11 @@ class ThreadResponse(BaseModel):
     threads: list[str]
 
 class FileInfo(BaseModel):
-    name: str       # ← fix #2
+    name: str
     type: str
     size: str
 
-class FileResponse(BaseModel):
+class FilesResponse(BaseModel):
     files: list[FileInfo]
 
 class UploadResponse(BaseModel):
@@ -155,9 +157,9 @@ async def get_threads():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/chat", response_model=ChatResponse)    # ← fix #4
+@router.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
-    from core import CFOBuddy
+    from core.graph import CFOBuddy
     config = {"configurable": {"thread_id": request.thread_id}}
     try:
         # LangGraph invoke is synchronous; run it in a thread to avoid
@@ -173,47 +175,57 @@ async def chat(request: ChatRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/files", response_model=FileResponse)
+@router.get("/files", response_model=FilesResponse)
 async def list_files():
     if not os.path.exists(DATA_FOLDER):
-        return FileResponse(files=[])
+        return FilesResponse(files=[])
     files = []
     for f in os.listdir(DATA_FOLDER):
         ext = os.path.splitext(f)[1].lower()
         if ext.lstrip(".") in ALLOWED_EXTENSIONS:
             size = os.path.getsize(os.path.join(DATA_FOLDER, f))
             files.append(FileInfo(name=f, type=ext.lstrip(".").upper(), size=f"{size/1024:.1f} KB"))
-    return FileResponse(files=files)
+    return FilesResponse(files=files)
 
 
-#Uploading the file and building the index can take some time, so we run build_index in the background after a file is uploaded. This way, the user gets an immediate response that their file was received, and the indexing happens asynchronously without blocking the API.
+# Uploading the file and building the index can take some time, so we run
+# build_index in the background after a file is uploaded. This way, the user
+# gets an immediate response that their file was received, and the indexing
+# happens asynchronously without blocking the API.
 @router.post("/upload", response_model=UploadResponse)
 async def upload_file(file: UploadFile, background_tasks: BackgroundTasks):
-    
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No file selected")
+
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext.lstrip(".") not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"File type not allowed. Supported: {', '.join(ALLOWED_EXTENSIONS)}"
+        )
+
+    os.makedirs(DATA_FOLDER, exist_ok=True)
     filepath = os.path.join(DATA_FOLDER, file.filename)
     content = await file.read()
     with open(filepath, "wb") as f:
         f.write(content)
 
-    ext = os.path.splitext(file.filename)[1].lower()
-
     if ext == ".csv":
-        logger.info("CSV file uploaded!")
+        logger.info("CSV file uploaded: %s", file.filename)
         background_tasks.add_task(load_csvs_to_neon)
         background_tasks.add_task(build_index_with_status)
-
     else:
-        logger.info("File uploaded: %s | type: %s | size: %.1f KB", file.filename, ext, len(content)/1024)
+        logger.info("File uploaded: %s | type: %s | size: %.1f KB", file.filename, ext, len(content) / 1024)
         background_tasks.add_task(build_index_with_status)
 
     return UploadResponse(
-        message= f" '{file.filename}' uploaded Successfully!",
+        message=f"'{file.filename}' uploaded successfully.",
         filename=file.filename
     )
 
 @router.get("/threads/{thread_id}/history")
 async def get_history(thread_id: str):
-    from core import CFOBuddy
+    from core.graph import CFOBuddy
     config = {"configurable": {"thread_id": thread_id}}
     try:
         state = CFOBuddy.get_state(config)
@@ -231,16 +243,21 @@ async def get_history(thread_id: str):
         }
     except Exception as e:
         raise HTTPException(status_code=404, detail=str(e))
-    
+
+
 @router.get("/indexing_status")
 async def get_indexing_status():
     return indexing_status
 
 
-@app.route('/charts/<filename>')
-def serve_chart(filename):
-    """Serve chart images."""
+@router.get("/charts/{filename}", tags=["Charts"])
+async def serve_chart(filename: str):
+    """Serve chart images from static/charts/."""
     chart_path = Path("static/charts") / filename
     if chart_path.exists():
-        return send_file(chart_path, mimetype='image/png')
-    return "Chart not found", 404
+        return StaticFileResponse(str(chart_path), media_type="image/png")
+    raise HTTPException(status_code=404, detail="Chart not found")
+
+
+# Mount the router (all routes prefixed with /api)
+app.include_router(router, prefix="/api")

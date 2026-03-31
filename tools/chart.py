@@ -15,7 +15,7 @@ except ImportError:
     DB_ENABLED = False
     print("Warning: Chart database not available. Charts will only be saved as files.")
 
-# Configuration - charts will be saved here
+
 CHART_STORAGE_PATH = Path("static/charts")
 CHART_STORAGE_PATH.mkdir(parents=True, exist_ok=True)
 
