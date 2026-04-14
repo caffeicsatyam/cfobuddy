@@ -19,7 +19,7 @@ from tools import (
     web_search_tool_node,
 )
 
-__all__ = ['fast_route']
+__all__ = ['CFOBuddy', 'graph_builder']
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -136,8 +136,6 @@ Always:
 
     model_config = {"frozen": True}
 
-
-# Instantiate once; nodes reference this object
 _prompts = PromptConfig()
 
 
@@ -145,10 +143,10 @@ _prompts = PromptConfig()
 # LLM BINDINGS
 # ══════════════════════════════════════════════════════════════════════════════
 
-llm_with_tools  = llm.bind_tools(basic_tools, parallel_tool_calls=False)
-llm_finance     = llm.bind_tools(finance_tools, parallel_tool_calls=False)
-llm_sql         = llm.bind_tools(sql_tools_list, parallel_tool_calls=False)
-llm_web_search  = llm.bind_tools(web_search_tools, parallel_tool_calls=False)
+llm_with_tools  = llm.bind_tools(basic_tools, parallel_tool_calls=False, tool_choice="auto")
+llm_finance     = llm.bind_tools(finance_tools, parallel_tool_calls=False, tool_choice="auto")
+llm_sql         = llm.bind_tools(sql_tools_list, parallel_tool_calls=False, tool_choice="auto")
+llm_web_search  = llm.bind_tools(web_search_tools, parallel_tool_calls=False, tool_choice="auto")
 
 # ══════════════════════════════════════════════════════════════════════════════
 # FAST ROUTER
@@ -163,7 +161,20 @@ def route_after_upload(state: State) -> str:
     - After: ~50ms per query (1000x faster!)
     """
     last_message = state["messages"][-1]
-    return fast_route(last_message.content)
+    route = fast_route(last_message.content)
+    
+    valid_routes = {
+        RouteTarget.MODEL.value,
+        RouteTarget.SQL.value,
+        RouteTarget.FINANCE.value,
+        RouteTarget.WEB_SEARCH.value
+    }
+    
+    if route not in valid_routes:
+        print(f" Invalid route '{route}', falling back to model node")
+        return RouteTarget.MODEL.value
+    
+    return route
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -172,8 +183,12 @@ def route_after_upload(state: State) -> str:
 
 @traceable(run_type="chain")
 def upload_node(state: State) -> dict:
-    """Placeholder for future file-upload handling."""
-    return {}
+    """
+    Passthrough node for future file-upload handling.
+    Currently just passes state through unchanged.
+    """
+    # Return empty messages list to maintain state structure
+    return {"messages": []}
 
 
 @traceable(run_type="chain")
@@ -236,7 +251,7 @@ graph_builder.add_conditional_edges(
     {
         RouteTarget.MODEL.value:      "model",
         RouteTarget.SQL.value:        "sql_node",
-                RouteTarget.FINANCE.value:    "finance_node",
+        RouteTarget.FINANCE.value:    "finance_node",
         RouteTarget.WEB_SEARCH.value: "web_search_node",
     },
 )
@@ -260,3 +275,9 @@ for node, tool_node in [
 # ══════════════════════════════════════════════════════════════════════════════
 
 CFOBuddy = graph_builder.compile(checkpointer=checkpointer)
+
+try:
+    from IPython.display import Image, display
+    display(Image(CFOBuddy.get_graph().draw_mermaid_png()))
+except Exception:
+    pass  
