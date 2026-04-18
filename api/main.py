@@ -1,7 +1,11 @@
 import asyncio
 import os
 import json
+import jwt
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Depends, Security
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import BackgroundTasks
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -21,6 +25,10 @@ EXPECTED_API_KEY = os.getenv("CFO_BUDDY_API_KEY")
 if not EXPECTED_API_KEY:
     logger.error("CFO_BUDDY_API_KEY is not set; refusing to start.")
     raise RuntimeError("CFO_BUDDY_API_KEY is not set")
+
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", EXPECTED_API_KEY)
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 # 1 day expiration
 
 app = FastAPI(
     title="CFOBuddy AI",
@@ -46,10 +54,13 @@ def require_api_key(
         raise HTTPException(status_code=401, detail="Invalid API key")
 
     token = credentials.credentials
-    if not token or token != EXPECTED_API_KEY:
-        raise HTTPException(status_code=401, detail="Invalid API key")
-
-    return token
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[ALGORITHM])
+        return payload
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token has expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
 
 # Global variable to track indexing status
 indexing_status = {"status": "ready", "message": "........"}
@@ -89,7 +100,7 @@ class FileInfo(BaseModel):
     type: str
     size: str
 
-class FileResponse(BaseModel):
+class FileResponseModels(BaseModel):
     files: list[FileInfo]
 
 class UploadResponse(BaseModel):
@@ -98,6 +109,26 @@ class UploadResponse(BaseModel):
 
 class ErrorResponse(BaseModel):
     error: str
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+# ==========================
+# AUTH
+# ==========================
+
+@app.post("/token", tags=["Auth"])
+async def login(form_data: LoginRequest):
+    if form_data.username != "admin" or form_data.password != EXPECTED_API_KEY:
+        raise HTTPException(status_code=401, detail="Incorrect username or password")
+        
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    expire = datetime.now(timezone.utc) + access_token_expires
+    to_encode = {"sub": form_data.username, "exp": expire}
+    encoded_jwt = jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=ALGORITHM)
+    
+    return {"access_token": encoded_jwt, "token_type": "bearer"}
 
 # ==========================
 # HEALTH
@@ -173,17 +204,17 @@ async def chat(request: ChatRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/files", response_model=FileResponse)
+@router.get("/files", response_model=FileResponseModels)
 async def list_files():
     if not os.path.exists(DATA_FOLDER):
-        return FileResponse(files=[])
+        return FileResponseModels(files=[])
     files = []
     for f in os.listdir(DATA_FOLDER):
         ext = os.path.splitext(f)[1].lower()
         if ext.lstrip(".") in ALLOWED_EXTENSIONS:
             size = os.path.getsize(os.path.join(DATA_FOLDER, f))
             files.append(FileInfo(name=f, type=ext.lstrip(".").upper(), size=f"{size/1024:.1f} KB"))
-    return FileResponse(files=files)
+    return FileResponseModels(files=files)
 
 
 #Uploading the file and building the index can take some time, so we run build_index in the background after a file is uploaded. This way, the user gets an immediate response that their file was received, and the indexing happens asynchronously without blocking the API.
@@ -236,11 +267,13 @@ async def get_history(thread_id: str):
 async def get_indexing_status():
     return indexing_status
 
+app.include_router(router)
 
-@app.route('/charts/<filename>')
-def serve_chart(filename):
+
+@app.get('/charts/{filename}')
+async def serve_chart(filename: str):
     """Serve chart images."""
     chart_path = Path("static/charts") / filename
     if chart_path.exists():
-        return send_file(chart_path, mimetype='image/png')
-    return "Chart not found", 404
+        return FileResponse(chart_path, media_type='image/png')
+    raise HTTPException(status_code=404, detail="Chart not found")
