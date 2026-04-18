@@ -43,7 +43,7 @@ cfobuddy/
 ## Features
 
 - **Multi-file support** — CSV, PDF, Excel, Word
-- **Semantic search** — LlamaIndex + Neon pgvector for document retrieval
+- **Hybrid retrieval search** — Semantic (LlamaIndex + Neon pgvector) + keyword BM25 (local docs in `data/`)
 - **Exact lookup** — precise queries by ID, account number, card number etc.
 - **Live financial data** — stock prices, income statements, balance sheets via yfinance + Twelve Data
 - **Web search** — real-time news via DuckDuckGo
@@ -212,12 +212,21 @@ Auto-generated docs at **http://localhost:8000/docs**
 
 | Tool | Source | Description |
 |------|--------|-------------|
-| `search_financial_docs` | LlamaIndex + Neon | Semantic search across uploaded files |
+| `search_financial_docs` | LlamaIndex + Neon + BM25 | Hybrid retrieval (semantic + keyword) across local files |
 | `exact_lookup` | pandas | Exact match by column value in CSVs |
 | `list_available_files` | local | Lists all files and CSV columns |
 | `get_financial_data` | yfinance + Twelve Data | Live stock quotes, financials, news |
 | `generate_chart` | Plotly | Auto-generates charts from data |
 | `brave_search` | DuckDuckGo | Real-time web search |
+
+---
+
+## Hybrid retrieval settings
+
+- `RAG_DATA_DIR` (default: `data`) — local folder used to build the BM25 corpus
+- `RAG_TOP_K` (default: `5`) — number of chunks returned
+- `HYBRID_ALPHA` (default: `0.6`) — weight for semantic/vector results
+- `HYBRID_BETA` (default: `0.4`) — weight for BM25 keyword results
 
 ---
 

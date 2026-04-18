@@ -136,8 +136,6 @@ Always:
 
     model_config = {"frozen": True}
 
-
-# Instantiate once; nodes reference this object
 _prompts = PromptConfig()
 
 
@@ -145,9 +143,9 @@ _prompts = PromptConfig()
 # LLM BINDINGS
 # ══════════════════════════════════════════════════════════════════════════════
 
-llm_with_tools  = llm.bind_tools(basic_tools, parallel_tool_calls=False)
-llm_finance     = llm.bind_tools(finance_tools, parallel_tool_calls=False)
-llm_sql         = llm.bind_tools(sql_tools_list, parallel_tool_calls=False)
+llm_with_tools  = llm.bind_tools(basic_tools, parallel_tool_calls=False, tool_choice="auto")
+llm_finance     = llm.bind_tools(finance_tools, parallel_tool_calls=False, tool_choice="auto")
+llm_sql         = llm.bind_tools(sql_tools_list, parallel_tool_calls=False, tool_choice="auto")
 llm_web_search  = llm.bind_tools(web_search_tools, parallel_tool_calls=False)
 
 # ══════════════════════════════════════════════════════════════════════════════

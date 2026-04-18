@@ -1,8 +1,23 @@
-import sqlite3
-from langgraph.checkpoint.sqlite import SqliteSaver
+import os
+import psycopg
+from psycopg.rows import dict_row
+from dotenv import load_dotenv
+from langgraph.checkpoint.postgres import PostgresSaver
 
-conn = sqlite3.connect("memory.db", check_same_thread=False)
-checkpointer = SqliteSaver(conn=conn)
+load_dotenv()
+
+DB_URI = os.environ["DATABASE_URL"]
+
+_conn = psycopg.connect(
+    DB_URI,
+    autocommit=True,
+    prepare_threshold=0,
+    row_factory=dict_row,
+)
+
+checkpointer = PostgresSaver(_conn)
+
+checkpointer.setup()
 
 
 def retrieve_all_threads():

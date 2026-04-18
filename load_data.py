@@ -57,7 +57,6 @@ def load_csvs_to_neon():
                     except Exception:
                         pass
 
-            # Load to Neon
             df.to_sql(
                 table_name,
                 engine,
