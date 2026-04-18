@@ -21,7 +21,8 @@ TABLE_NAME = "data_cfo_buddy_vectors"
 # SETTINGS
 # ==========================
 Settings.embed_model = HuggingFaceEmbedding(
-    model_name="BAAI/bge-base-en-v1.5"
+    model_name="sentence-transformers/all-MiniLM-L6-v2",
+    embed_batch_size=32,
 )
 
 Settings.llm = Groq(
@@ -46,7 +47,7 @@ vector_store = PGVectorStore.from_params(
     port=url.port or 5432,
     user=url.username,
     table_name=TABLE_NAME,
-    embed_dim=768,
+    embed_dim=4096,          
     hybrid_search=True,
     text_search_config="english",
 )
@@ -63,7 +64,7 @@ def reload_index():
     global index
     index = VectorStoreIndex.from_vector_store(vector_store)
     get_query_engine.cache_clear()
-    print("✅ Index reloaded")
+    print("Index reloaded")
 
 # ==========================
 # CACHE QUERY ENGINE

@@ -1,17 +1,17 @@
 import os
 import datetime
 from dotenv import load_dotenv
-
+from llama_index.embeddings.nvidia import NVIDIAEmbedding
+from llama_index.readers.file import DocxReader, PandasCSVReader
+from llama_index.vector_stores.postgres import PGVectorStore
+from llama_index.core.node_parser import SentenceSplitter
+from langchain_nvidia_ai_endpoints import NVIDIAEmbeddings
 from llama_index.core import (
     VectorStoreIndex,
     SimpleDirectoryReader,
     Settings,
     StorageContext
 )
-from llama_index.embeddings.huggingface import HuggingFaceEmbedding
-from llama_index.readers.file import UnstructuredReader
-from llama_index.vector_stores.postgres import PGVectorStore
-from llama_index.core.node_parser import SentenceSplitter
 
 from cfobuddy_logging import configure_logging
 
@@ -21,19 +21,23 @@ logger = configure_logging()
 DATA_FOLDER = "data"
 TABLE_NAME = "data_cfo_buddy_vectors"
 
+
 def build_index():
     """Build and store hybrid vectors in Neon DB."""
 
-    Settings.embed_model = HuggingFaceEmbedding(
-        model_name="BAAI/bge-base-en-v1.5"
-    )
+    Settings.embed_model = NVIDIAEmbedding(
+        model="nvidia/nv-embed-v1",
+        api_key=os.getenv("NVIDIA_EMBEDDING_API_KEY"),
+    )   
     Settings.llm = None
 
+    # ── Chunking ───────────────────────────────────────────────────────────
     Settings.node_parser = SentenceSplitter(
-        chunk_size=512,
-        chunk_overlap=100
+        chunk_size=256,
+        chunk_overlap=50
     )
 
+    # ── Vector Store ───────────────────────────────────────────────────────
     vector_store = PGVectorStore.from_params(
         host=os.getenv("NEON_HOST"),
         database=os.getenv("NEON_DATABASE"),
@@ -41,7 +45,7 @@ def build_index():
         password=os.getenv("NEON_PASSWORD"),
         port="5432",
         table_name=TABLE_NAME,
-        embed_dim=768,
+        embed_dim=4096,           
         hybrid_search=True,
         text_search_config="english",
     )
@@ -50,13 +54,13 @@ def build_index():
         vector_store=vector_store
     )
 
-    logger.info("Loading documents...")
+    # ── Load Documents ─────────────────────────────────────────────────────
+    logger.info("Loading documents from '%s'...", DATA_FOLDER)
 
     documents = SimpleDirectoryReader(
         input_dir=DATA_FOLDER,
         recursive=True,
         file_extractor={
-            ".pdf": UnstructuredReader(),
             ".docx": DocxReader(),
             ".csv": PandasCSVReader(),
         }
@@ -75,7 +79,8 @@ def build_index():
     for doc in documents:
         doc.metadata["indexed_at"] = datetime.datetime.now().isoformat()
 
-    logger.info("Building index...")
+    # ── Build Index ────────────────────────────────────────────────────────
+    logger.info("Building index with %d documents...", len(documents))
 
     VectorStoreIndex.from_documents(
         documents,
@@ -83,7 +88,7 @@ def build_index():
         show_progress=True
     )
 
-    logger.info("Index built successfully.")
+    logger.info("Index built successfully!")
 
 
 if __name__ == "__main__":
