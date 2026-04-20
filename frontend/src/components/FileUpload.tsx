@@ -64,8 +64,8 @@ export default function FileUpload({ onUploadSuccess }: Props) {
       }
 
       if (onUploadSuccess) onUploadSuccess();
-    } catch (err: any) {
-      setError(err.message || 'Failed to upload file');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to upload file');
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';

@@ -1,19 +1,29 @@
 import os
+from typing import Union
 
 import yfinance as yf
-from twelvedata import TDClient
-from langchain_core.tools import tool
 from dotenv import load_dotenv
-from typing import Union
+from langchain_core.tools import tool
+from twelvedata import TDClient
 
 load_dotenv()
 
 TD_API_KEY = os.getenv("TWELVE_DATA_API_KEY")
-td = TDClient(apikey=TD_API_KEY)
+_td_client: TDClient | None = None
 
-# ==========================
-# HELPERS
-# ==========================
+
+def get_td_client() -> TDClient:
+    global _td_client
+
+    if _td_client is not None:
+        return _td_client
+
+    if not TD_API_KEY:
+        raise RuntimeError("TWELVE_DATA_API_KEY is not set")
+
+    _td_client = TDClient(apikey=TD_API_KEY)
+    return _td_client
+
 
 def format_number(value) -> str:
     if value is None:
@@ -22,17 +32,12 @@ def format_number(value) -> str:
         value = float(value)
         if abs(value) >= 1_000_000_000:
             return f"${value / 1_000_000_000:.2f}B"
-        elif abs(value) >= 1_000_000:
+        if abs(value) >= 1_000_000:
             return f"${value / 1_000_000:.2f}M"
-        else:
-            return f"${value:,.2f}"
-    except:
+        return f"${value:,.2f}"
+    except Exception:
         return str(value)
 
-
-# ==========================
-# YFINANCE HANDLERS (primary)
-# ==========================
 
 def _yf_quote(symbol: str) -> str:
     info = yf.Ticker(symbol).info
@@ -54,7 +59,7 @@ def _yf_income(symbol: str, limit: int) -> str:
     df = yf.Ticker(symbol).financials
     if df is None or df.empty:
         return f"No income statement found for {symbol}."
-    result = [f"Income Statement — {symbol}"]
+    result = [f"Income Statement - {symbol}"]
     for col in list(df.columns)[:limit]:
         result.append(f"""
 Period:        {str(col)[:10]}
@@ -70,7 +75,7 @@ def _yf_balance(symbol: str, limit: int) -> str:
     df = yf.Ticker(symbol).balance_sheet
     if df is None or df.empty:
         return f"No balance sheet found for {symbol}."
-    result = [f"Balance Sheet — {symbol}"]
+    result = [f"Balance Sheet - {symbol}"]
     for col in list(df.columns)[:limit]:
         result.append(f"""
 Period:             {str(col)[:10]}
@@ -86,15 +91,15 @@ def _yf_cashflow(symbol: str, limit: int) -> str:
     df = yf.Ticker(symbol).cashflow
     if df is None or df.empty:
         return f"No cash flow found for {symbol}."
-    result = [f" Cash Flow — {symbol}"]
+    result = [f"Cash Flow - {symbol}"]
     for col in list(df.columns)[:limit]:
         result.append(f"""
-        Period:         {str(col)[:10]}
-        Operating CF:   {format_number(df[col].get('Operating Cash Flow'))}
-        Investing CF:   {format_number(df[col].get('Investing Cash Flow'))}
-        Financing CF:   {format_number(df[col].get('Financing Cash Flow'))}
-        Free CF:        {format_number(df[col].get('Free Cash Flow'))}
-        CapEx:          {format_number(df[col].get('Capital Expenditure'))}""")
+Period:         {str(col)[:10]}
+Operating CF:   {format_number(df[col].get('Operating Cash Flow'))}
+Investing CF:   {format_number(df[col].get('Investing Cash Flow'))}
+Financing CF:   {format_number(df[col].get('Financing Cash Flow'))}
+Free CF:        {format_number(df[col].get('Free Cash Flow'))}
+CapEx:          {format_number(df[col].get('Capital Expenditure'))}""")
     return "\n---".join(result)
 
 
@@ -103,7 +108,7 @@ def _yf_metrics(symbol: str) -> str:
     if not info:
         return f"No metrics found for {symbol}."
     return f"""
-    Key Metrics — {symbol}
+    Key Metrics - {symbol}
     PE Ratio:       {info.get('trailingPE', 'N/A')}
     Forward PE:     {info.get('forwardPE', 'N/A')}
     PB Ratio:       {info.get('priceToBook', 'N/A')}
@@ -121,14 +126,14 @@ def _yf_ratings(symbol: str) -> str:
         recs = yf.Ticker(symbol).recommendations
         if recs is None or recs.empty:
             raise ValueError("empty")
-        result = [f" Analyst Ratings — {symbol}"]
+        result = [f"Analyst Ratings - {symbol}"]
         for _, row in recs.tail(5).iterrows():
             result.append(
                 f"{str(row.name)[:10]} | {row.get('Firm', 'N/A')} | "
                 f"{row.get('To Grade', 'N/A')} (from {row.get('From Grade', 'N/A')})"
             )
         return "\n".join(result)
-    except:
+    except Exception:
         return f"No analyst ratings available for {symbol}."
 
 
@@ -136,13 +141,13 @@ def _yf_news(symbol: str, limit: int) -> str:
     news = yf.Ticker(symbol).news
     if not news:
         return f"No news found for {symbol}."
-    result = [f" Latest News — {symbol}"]
+    result = [f"Latest News - {symbol}"]
     for article in news[:limit]:
-        content = article.get('content', {})
-        title = content.get('title', 'No title')
-        url = content.get('canonicalUrl', {}).get('url', '')
-        date = content.get('pubDate', '')[:10]
-        result.append(f"• [{date}] {title}\n  {url}")
+        content = article.get("content", {})
+        title = content.get("title", "No title")
+        url = content.get("canonicalUrl", {}).get("url", "")
+        date = content.get("pubDate", "")[:10]
+        result.append(f"- [{date}] {title}\n  {url}")
     return "\n\n".join(result)
 
 
@@ -161,21 +166,16 @@ Website:    {info.get('website', 'N/A')}
 {info.get('longBusinessSummary', 'N/A')[:400]}...""".strip()
 
 
-# ==========================
-# TWELVE DATA HANDLERS (complement — price history, real-time)
-# ==========================
-
 def _td_price_history(symbol: str, interval: str = "1day", limit: int = 30) -> str:
-    """Get OHLCV price history — Twelve Data strength."""
     try:
-        ts = td.time_series(
+        ts = get_td_client().time_series(
             symbol=symbol,
             interval=interval,
-            outputsize=limit
+            outputsize=limit,
         ).as_json()
         if not ts:
             return f"No price history found for {symbol}."
-        result = [f" Price History — {symbol} ({interval})"]
+        result = [f"Price History - {symbol} ({interval})"]
         for bar in ts[:10]:
             result.append(
                 f"{bar.get('datetime')} | O: {bar.get('open')} "
@@ -183,82 +183,59 @@ def _td_price_history(symbol: str, interval: str = "1day", limit: int = 30) -> s
                 f"C: {bar.get('close')} V: {bar.get('volume', 'N/A')}"
             )
         return "\n".join(result)
-    except Exception as e:
-        return f"Twelve Data error: {e}"
+    except Exception as exc:
+        return f"Twelve Data error: {exc}"
 
 
 def _td_quote(symbol: str) -> str:
-    """Real-time quote from Twelve Data."""
     try:
-        quote = td.quote(symbol=symbol).as_json()
+        quote = get_td_client().quote(symbol=symbol).as_json()
         if not quote:
             return f"No quote found for {symbol}."
         return f"""
-    {quote.get('name', symbol)} ({symbol}) — Twelve Data
+    {quote.get('name', symbol)} ({symbol}) - Twelve Data
 Price:         ${quote.get('close', 'N/A')}
 Change:        {quote.get('change', 'N/A')} ({quote.get('percent_change', 'N/A')}%)
 Open/High/Low: ${quote.get('open', 'N/A')} / ${quote.get('high', 'N/A')} / ${quote.get('low', 'N/A')}
 Volume:        {quote.get('volume', 'N/A')}
 52W High/Low:  ${quote.get('fifty_two_week', {}).get('high', 'N/A')} / ${quote.get('fifty_two_week', {}).get('low', 'N/A')}
 Market Open:   {quote.get('is_market_open', 'N/A')}""".strip()
-    except Exception as e:
-        return f"Twelve Data error: {e}"
+    except Exception as exc:
+        return f"Twelve Data error: {exc}"
 
-
-# ==========================
-# HANDLER MAP
-# ==========================
 
 HANDLERS = {
-    # yfinance — fundamental data
-    "quote":    lambda s, p, l: _yf_quote(s),
-    "income":   lambda s, p, l: _yf_income(s, l),
-    "balance":  lambda s, p, l: _yf_balance(s, l),
+    "quote": lambda s, p, l: _yf_quote(s),
+    "income": lambda s, p, l: _yf_income(s, l),
+    "balance": lambda s, p, l: _yf_balance(s, l),
     "cashflow": lambda s, p, l: _yf_cashflow(s, l),
-    "metrics":  lambda s, p, l: _yf_metrics(s),
-    "ratings":  lambda s, p, l: _yf_ratings(s),
-    "news":     lambda s, p, l: _yf_news(s, l),
-    "profile":  lambda s, p, l: _yf_profile(s),
-    # Twelve Data — price/market data
-    "history":  lambda s, p, l: _td_price_history(s, limit=l),
+    "metrics": lambda s, p, l: _yf_metrics(s),
+    "ratings": lambda s, p, l: _yf_ratings(s),
+    "news": lambda s, p, l: _yf_news(s, l),
+    "profile": lambda s, p, l: _yf_profile(s),
+    "history": lambda s, p, l: _td_price_history(s, limit=l),
     "realtime": lambda s, p, l: _td_quote(s),
 }
 
-# ==========================
-# SINGLE UNIFIED TOOL
-# ==========================
 
 @tool
-def get_financial_data(symbol: str, data_type: str, period: str = "annual", limit: Union[int, str] = 3) -> str:
+def get_financial_data(
+    symbol: str,
+    data_type: str,
+    period: str = "annual",
+    limit: Union[int, str] = 3,
+) -> str:
     """
     Fetch any financial data for a publicly traded company.
     Uses yfinance (fundamentals) and Twelve Data (price history & real-time).
-
-    Args:
-        symbol: Stock ticker e.g. 'AAPL', 'MSFT', 'GOOGL', 'TSLA'
-        data_type: Type of data:
-            'quote'    — live price, volume, market cap, PE (yfinance)
-            'income'   — revenue, net income, EBITDA (yfinance)
-            'balance'  — assets, liabilities, equity (yfinance)
-            'cashflow' — operating, free cash flow (yfinance)
-            'metrics'  — PE, ROE, margins, ratios (yfinance)
-            'ratings'  — analyst recommendations (yfinance)
-            'news'     — latest news articles (yfinance)
-            'profile'  — company overview (yfinance)
-            'history'  — OHLCV price history (Twelve Data)
-            'realtime' — real-time quote with 52W range (Twelve Data)
-        period: 'annual' or 'quarter' (default: 'annual')
-        limit: Number of periods or bars to return (default: 3)
     """
+
     symbol = symbol.upper().strip()
     data_type = data_type.lower().strip()
-    limit = int(limit)  # coerce here
+    limit = int(limit)
     period = str(period)
 
     if data_type not in HANDLERS:
-        return (
-            f"Unknown data_type '{data_type}'. "
-            f"Valid options: {', '.join(HANDLERS.keys())}"
-        )
+      return f"Unknown data_type '{data_type}'. Valid options: {', '.join(HANDLERS.keys())}"
 
     return HANDLERS[data_type](symbol, period, limit)

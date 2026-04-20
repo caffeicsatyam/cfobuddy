@@ -4,15 +4,23 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { getThreads } from '../lib/api';
+import { createId } from '../lib/id';
 import { ThreadSkeleton } from './LoadingStates';
 import styles from './Sidebar.module.css';
 
 interface Props {
   currentThreadId: string;
   onSelectThread: (id: string) => void;
+  userName?: string;
+  userRole?: string;
 }
 
-export default function Sidebar({ currentThreadId, onSelectThread }: Props) {
+export default function Sidebar({
+  currentThreadId,
+  onSelectThread,
+  userName = 'Authenticated User',
+  userRole = 'JWT Session',
+}: Props) {
   const pathname = usePathname();
   const [threads, setThreads] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -74,7 +82,7 @@ export default function Sidebar({ currentThreadId, onSelectThread }: Props) {
           <h3 className="label-upper">Chat History</h3>
           <button 
             className={styles.newBtn} 
-            onClick={() => onSelectThread(crypto.randomUUID())}
+            onClick={() => onSelectThread(createId())}
             title="New Analysis"
           >
             +
@@ -111,10 +119,10 @@ export default function Sidebar({ currentThreadId, onSelectThread }: Props) {
         </nav>
         
         <div className={styles.userProfile}>
-          <div className={styles.avatar}>AS</div>
+          <div className={styles.avatar}>{userName.slice(0, 2).toUpperCase()}</div>
           <div className={styles.userInfo}>
-            <p className={styles.userName}>Alex Stratton</p>
-            <p className={styles.userRole}>Principal Auditor</p>
+            <p className={styles.userName}>{userName}</p>
+            <p className={styles.userRole}>{userRole}</p>
           </div>
         </div>
       </div>

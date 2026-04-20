@@ -1,137 +1,252 @@
 import type {
+  AuthUser,
   ChatAPIResponse,
-  ThreadsAPIResponse,
   FilesAPIResponse,
-  UploadAPIResponse,
-  StreamTokenCallback,
+  LoginAPIResponse,
   StreamCompleteCallback,
+  StreamTokenCallback,
+  ThreadHistoryAPIResponse,
+  ThreadsAPIResponse,
+  UploadAPIResponse,
 } from './types';
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
-const API_KEY = process.env.NEXT_PUBLIC_API_KEY ?? '';
+const CONFIGURED_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
+const LEGACY_API_KEY = process.env.NEXT_PUBLIC_API_KEY ?? '';
+const AUTH_TOKEN_KEY = 'cfobuddy.auth.token';
+
+export function getApiBaseUrl(): string {
+  if (typeof window === 'undefined') {
+    return CONFIGURED_BASE_URL;
+  }
+
+  try {
+    const configured = new URL(CONFIGURED_BASE_URL);
+    const clientHost = window.location.hostname;
+    const configuredHost = configured.hostname;
+    const isLoopbackHost =
+      configuredHost === 'localhost' ||
+      configuredHost === '127.0.0.1' ||
+      configuredHost === '::1';
+    const isRemoteClient =
+      clientHost !== 'localhost' &&
+      clientHost !== '127.0.0.1' &&
+      clientHost !== '::1';
+
+    if (isLoopbackHost && isRemoteClient) {
+      configured.hostname = clientHost;
+      return configured.toString().replace(/\/$/, '');
+    }
+
+    return configured.toString().replace(/\/$/, '');
+  } catch {
+    return CONFIGURED_BASE_URL.replace(/\/$/, '');
+  }
+}
+
+function getStoredToken(): string {
+  if (typeof window === 'undefined') {
+    return LEGACY_API_KEY;
+  }
+  return window.localStorage.getItem(AUTH_TOKEN_KEY) ?? LEGACY_API_KEY;
+}
+
+export function saveAuthToken(token: string): void {
+  if (typeof window !== 'undefined') {
+    window.localStorage.setItem(AUTH_TOKEN_KEY, token);
+  }
+}
+
+export function clearAuthToken(): void {
+  if (typeof window !== 'undefined') {
+    window.localStorage.removeItem(AUTH_TOKEN_KEY);
+  }
+}
+
+export function hasAuthToken(): boolean {
+  return Boolean(getStoredToken());
+}
+
+async function parseError(res: Response, fallback: string): Promise<never> {
+  try {
+    const data = (await res.json()) as { detail?: string; error?: string };
+    throw new Error(data.detail ?? data.error ?? fallback);
+  } catch (error) {
+    if (error instanceof Error && error.message) {
+      throw error;
+    }
+    throw new Error(fallback);
+  }
+}
 
 function headers(extra: Record<string, string> = {}): HeadersInit {
+  const token = getStoredToken();
   return {
     'Content-Type': 'application/json',
-    Authorization: `Bearer ${API_KEY}`,
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...extra,
   };
 }
 
-// ─── Chat (non-streaming fallback) ───────────────────────────────────────────
+export async function login(username: string, password: string): Promise<LoginAPIResponse> {
+  const baseUrl = getApiBaseUrl();
+  const form = new URLSearchParams();
+  form.set('username', username);
+  form.set('password', password);
+
+  const res = await fetch(`${baseUrl}/auth/login`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: form.toString(),
+  });
+
+  if (!res.ok) {
+    await parseError(res, 'Login failed');
+  }
+
+  const data = (await res.json()) as LoginAPIResponse;
+  saveAuthToken(data.access_token);
+  return data;
+}
+
+export async function getCurrentUser(): Promise<AuthUser> {
+  const baseUrl = getApiBaseUrl();
+  const res = await fetch(`${baseUrl}/auth/me`, {
+    headers: headers(),
+  });
+
+  if (!res.ok) {
+    if (res.status === 401) {
+      clearAuthToken();
+    }
+    await parseError(res, 'Unable to load current user');
+  }
+
+  return res.json() as Promise<AuthUser>;
+}
 
 export async function sendMessage(
   message: string,
   threadId: string
 ): Promise<ChatAPIResponse> {
-  const res = await fetch(`${BASE_URL}/chat`, {
+  const baseUrl = getApiBaseUrl();
+  const res = await fetch(`${baseUrl}/chat`, {
     method: 'POST',
     headers: headers(),
     body: JSON.stringify({ message, thread_id: threadId }),
   });
-  if (!res.ok) throw new Error(`Chat error: ${res.statusText}`);
+  if (!res.ok) {
+    await parseError(res, 'Chat request failed');
+  }
   return res.json() as Promise<ChatAPIResponse>;
 }
 
-// ─── Streaming Chat (SSE / chunked) ──────────────────────────────────────────
-/**
- * Attempts streaming via Server-Sent Events.
- * Falls back to a regular POST request if the server doesn't support SSE.
- *
- * NOTE: The FastAPI backend currently uses a regular POST endpoint.
- * To enable true streaming add a `/chat/stream` SSE endpoint to api/main.py.
- * Until then this function calls the normal endpoint and delivers the full
- * response in one shot via onComplete.
- */
 export async function sendMessageStream(
   message: string,
   threadId: string,
   onToken: StreamTokenCallback,
   onComplete: StreamCompleteCallback
 ): Promise<void> {
-  try {
-    const res = await fetch(`${BASE_URL}/chat`, {
-      method: 'POST',
-      headers: headers(),
-      body: JSON.stringify({ message, thread_id: threadId }),
-    });
-    if (!res.ok) throw new Error(`Chat error: ${res.statusText}`);
+  const baseUrl = getApiBaseUrl();
+  const res = await fetch(`${baseUrl}/chat`, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify({ message, thread_id: threadId }),
+  });
 
-    // ── Attempt chunked streaming ─────────────────────────────────────────
-    if (res.body) {
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let accumulated = '';
+  if (!res.ok) {
+    await parseError(res, 'Chat request failed');
+  }
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        accumulated += chunk;
-        onToken(chunk);
-      }
+  if (res.body) {
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let accumulated = '';
 
-      // Try to parse the accumulated JSON as the API response
-      try {
-        const parsed = JSON.parse(accumulated) as ChatAPIResponse;
-        onComplete(parsed);
-        return;
-      } catch {
-        // Response was streamed as text, construct a response object
-        onComplete({ response: accumulated, thread_id: threadId, chart: null });
-        return;
-      }
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = decoder.decode(value, { stream: true });
+      accumulated += chunk;
+      onToken(chunk);
     }
 
-    // ── Fallback: read entire body ────────────────────────────────────────
-    const data = (await res.json()) as ChatAPIResponse;
-    onToken(data.response);
-    onComplete(data);
-  } catch (err) {
-    throw err;
+    try {
+      const parsed = JSON.parse(accumulated) as ChatAPIResponse;
+      onComplete(parsed);
+      return;
+    } catch {
+      onComplete({ response: accumulated, thread_id: threadId, chart: null });
+      return;
+    }
   }
+
+  const data = (await res.json()) as ChatAPIResponse;
+  onToken(data.response);
+  onComplete(data);
 }
 
-// ─── Threads ─────────────────────────────────────────────────────────────────
-
 export async function getThreads(): Promise<ThreadsAPIResponse> {
-  const res = await fetch(`${BASE_URL}/threads`, {
+  const baseUrl = getApiBaseUrl();
+  const res = await fetch(`${baseUrl}/threads`, {
     headers: headers(),
   });
-  if (!res.ok) throw new Error(`Threads error: ${res.statusText}`);
+  if (!res.ok) {
+    await parseError(res, 'Unable to load threads');
+  }
   return res.json() as Promise<ThreadsAPIResponse>;
 }
 
-// ─── Files ───────────────────────────────────────────────────────────────────
-
-export async function getFiles(): Promise<FilesAPIResponse> {
-  const res = await fetch(`${BASE_URL}/files`, {
+export async function getThreadHistory(threadId: string): Promise<ThreadHistoryAPIResponse> {
+  const baseUrl = getApiBaseUrl();
+  const res = await fetch(`${baseUrl}/threads/${threadId}/history`, {
     headers: headers(),
   });
-  if (!res.ok) throw new Error(`Files error: ${res.statusText}`);
+  if (res.status === 404) {
+    return { thread_id: threadId, messages: [] };
+  }
+  if (!res.ok) {
+    await parseError(res, 'Unable to load thread history');
+  }
+  return res.json() as Promise<ThreadHistoryAPIResponse>;
+}
+
+export async function getFiles(): Promise<FilesAPIResponse> {
+  const baseUrl = getApiBaseUrl();
+  const res = await fetch(`${baseUrl}/files`, {
+    headers: headers(),
+  });
+  if (!res.ok) {
+    await parseError(res, 'Unable to load files');
+  }
   return res.json() as Promise<FilesAPIResponse>;
 }
 
 export async function uploadFile(file: File): Promise<UploadAPIResponse> {
+  const baseUrl = getApiBaseUrl();
   const form = new FormData();
   form.append('file', file);
 
-  const res = await fetch(`${BASE_URL}/upload`, {
+  const token = getStoredToken();
+  const res = await fetch(`${baseUrl}/upload`, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${API_KEY}`,
-    },
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     body: form,
   });
-  if (!res.ok) throw new Error(`Upload error: ${res.statusText}`);
+  if (!res.ok) {
+    await parseError(res, 'Upload failed');
+  }
   return res.json() as Promise<UploadAPIResponse>;
 }
 
 export async function getIndexingStatus(): Promise<{ status: string; message: string }> {
-  const res = await fetch(`${BASE_URL}/indexing_status`, {
+  const baseUrl = getApiBaseUrl();
+  const res = await fetch(`${baseUrl}/indexing_status`, {
     headers: headers(),
   });
-  if (!res.ok) throw new Error(`Status error: ${res.statusText}`);
+  if (!res.ok) {
+    await parseError(res, 'Unable to load indexing status');
+  }
   return res.json() as Promise<{ status: string; message: string }>;
 }
-

@@ -118,6 +118,8 @@ Use get_financial_data for all market queries.
 Available data_types: quote, income, balance, cashflow, metrics, ratings, news, profile, history, realtime
 
 Always:
+- On the first response to a finance/stock query, call a finance tool instead of answering from memory
+- For stock/company lookups, prefer get_financial_data first and then summarize the tool output
 - Present numbers with units (B for billions, M for millions)
 - Highlight key insights after presenting data
 - Compare periods when multiple results are returned
@@ -145,6 +147,7 @@ _prompts = PromptConfig()
 
 llm_with_tools  = llm.bind_tools(basic_tools, parallel_tool_calls=False, tool_choice="auto")
 llm_finance     = llm.bind_tools(finance_tools, parallel_tool_calls=False, tool_choice="auto")
+llm_finance_first_pass = llm.bind_tools(finance_tools, parallel_tool_calls=False, tool_choice="required")
 llm_sql         = llm.bind_tools(sql_tools_list, parallel_tool_calls=False, tool_choice="auto")
 llm_web_search  = llm.bind_tools(web_search_tools, parallel_tool_calls=False)
 
@@ -194,7 +197,16 @@ def sql_node(state: State) -> dict:
 def finance_node(state: State) -> dict:
     """Finance node — public company / market queries."""
     messages = [SystemMessage(content=_prompts.finance)] + list(state["messages"])
-    response = llm_finance.invoke(messages)
+    last_message = state["messages"][-1] if state["messages"] else None
+    last_message_type = getattr(last_message, "type", "")
+
+    # Force a tool call on the first finance turn so stock questions use live data
+    # instead of a generic model-only answer. After tool output returns, switch back
+    # to the normal finance model so it can summarize and stop cleanly.
+    if last_message_type == "human":
+        response = llm_finance_first_pass.invoke(messages)
+    else:
+        response = llm_finance.invoke(messages)
     return {"messages": [response]}
 
 

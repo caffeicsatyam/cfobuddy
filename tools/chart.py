@@ -1,7 +1,7 @@
 import json
 import os
 from datetime import datetime
-from typing import Literal, Union
+from typing import Literal, Optional, Union
 from pathlib import Path
 import matplotlib.pyplot as plt
 import matplotlib
@@ -89,7 +89,7 @@ def generate_chart(
     x_label: str = "",
     y_label: str = "",
     description: str = "",
-    thread_id: str = None  # Track which conversation
+    thread_id: Optional[str] = None  # Track which conversation
 ) -> str:
     """
     Generate a chart visualization from data and save as PNG image.
@@ -287,7 +287,7 @@ def _parse_number(value: str) -> float:
 
 
 @tool
-def list_charts(thread_id: str = None, limit: int = 10) -> str:
+def list_charts(thread_id: Optional[str] = None, limit: int = 10) -> str:
     """
     List recently created charts, optionally filtered by conversation thread.
     
