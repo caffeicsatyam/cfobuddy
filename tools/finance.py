@@ -204,8 +204,18 @@ Market Open:   {quote.get('is_market_open', 'N/A')}""".strip()
         return f"Twelve Data error: {exc}"
 
 
+def _best_quote(symbol: str) -> str:
+    try:
+        result = _yf_quote(symbol)
+        if result and "No data found" not in result:
+            return result
+    except Exception:
+        pass
+    return _td_quote(symbol)
+
+
 HANDLERS = {
-    "quote": lambda s, p, l: _yf_quote(s),
+    "quote": lambda s, p, l: _best_quote(s),
     "income": lambda s, p, l: _yf_income(s, l),
     "balance": lambda s, p, l: _yf_balance(s, l),
     "cashflow": lambda s, p, l: _yf_cashflow(s, l),
@@ -236,6 +246,9 @@ def get_financial_data(
     period = str(period)
 
     if data_type not in HANDLERS:
-      return f"Unknown data_type '{data_type}'. Valid options: {', '.join(HANDLERS.keys())}"
+        return f"Unknown data_type '{data_type}'. Valid options: {', '.join(HANDLERS.keys())}"
 
-    return HANDLERS[data_type](symbol, period, limit)
+    try:
+        return HANDLERS[data_type](symbol, period, limit)
+    except Exception as exc:
+        return f"Unable to fetch {data_type} data for {symbol}: {exc}"

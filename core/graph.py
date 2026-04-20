@@ -1,6 +1,7 @@
 from __future__ import annotations
+import re
 from pydantic import BaseModel
-from langchain_core.messages import SystemMessage
+from langchain_core.messages import AIMessage, SystemMessage
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import tools_condition
 from langsmith import traceable
@@ -13,6 +14,8 @@ from tools import (
     finance_tools,
     sql_tools_list,
     web_search_tools,
+    get_financial_data,
+    list_available_files,
     sql_tool_node,
     finance_tool_node,
     internal_tool_node,
@@ -60,12 +63,14 @@ Routing rules:
 - Live stock prices, financials, ratings → get_financial_data
 - Current news or general web queries → web_search
 - When user mentions a specific file → ALWAYS use search_financial_docs
+- When user asks what files/documents/uploads are available → ALWAYS call list_available_files before answering
 - After retrieving data → always summarize clearly, never dump raw output
 - For financial data, ALWAYS present numbers with units (B/M) and highlight insights
 - Apply generate_chart for trends over time or comparisons
 - Unsure what files exist → list_available_files ONCE, then use the result to answer. NEVER call it again.
 - MAXIMUM 3 tool calls per query. After that, give your best answer with available info.
 - NEVER call the same tool twice with the same arguments.
+- NEVER invent filenames, uploads, or tables. If a tool was not called, say you do not know.
 
 SQL ERROR RECOVERY:
 - If sql_query returns an error, analyze it carefully
@@ -147,9 +152,78 @@ _prompts = PromptConfig()
 
 llm_with_tools  = llm.bind_tools(basic_tools, parallel_tool_calls=False, tool_choice="auto")
 llm_finance     = llm.bind_tools(finance_tools, parallel_tool_calls=False, tool_choice="auto")
-llm_finance_first_pass = llm.bind_tools(finance_tools, parallel_tool_calls=False, tool_choice="required")
 llm_sql         = llm.bind_tools(sql_tools_list, parallel_tool_calls=False, tool_choice="auto")
 llm_web_search  = llm.bind_tools(web_search_tools, parallel_tool_calls=False)
+
+
+FILE_INVENTORY_PATTERN = re.compile(
+    r"\b("
+    r"what\s+files|which\s+files|available\s+files|list\s+(all\s+)?files|"
+    r"what\s+documents|available\s+documents|uploaded\s+files|uploads?|"
+    r"what\s+data\s+do\s+you\s+have|which\s+documents\s+do\s+you\s+have"
+    r")\b",
+    re.IGNORECASE,
+)
+
+
+def is_file_inventory_query(message: object) -> bool:
+    content = getattr(message, "content", "")
+    return isinstance(content, str) and bool(FILE_INVENTORY_PATTERN.search(content))
+
+
+FINANCE_COMPANY_ALIASES = {
+    "google": "GOOGL",
+    "alphabet": "GOOGL",
+    "apple": "AAPL",
+    "microsoft": "MSFT",
+    "tesla": "TSLA",
+    "nvidia": "NVDA",
+    "amazon": "AMZN",
+    "meta": "META",
+}
+
+
+def infer_finance_symbol(query: str) -> str | None:
+    query_lower = query.lower()
+
+    for alias, symbol in FINANCE_COMPANY_ALIASES.items():
+        if re.search(rf"\b{re.escape(alias)}\b", query_lower):
+            return symbol
+
+    for candidate in re.findall(r"\b[A-Z]{1,5}\b", query):
+        if candidate not in {"USD", "EPS", "PE"}:
+            return candidate
+
+    for candidate in re.findall(r"\b[a-z]{1,5}\b", query_lower):
+        maybe_symbol = candidate.upper()
+        if maybe_symbol in {"GOOG", "GOOGL", "AAPL", "MSFT", "TSLA", "NVDA", "AMZN", "META"}:
+            return maybe_symbol
+
+    return None
+
+
+def infer_finance_data_type(query: str) -> str:
+    query_lower = query.lower()
+
+    if any(term in query_lower for term in ("history", "historical", "trend", "chart", "over time")):
+        return "history"
+    if "news" in query_lower:
+        return "news"
+    if any(term in query_lower for term in ("profile", "about the company", "company info")):
+        return "profile"
+    if any(term in query_lower for term in ("rating", "ratings", "analyst")):
+        return "ratings"
+    if any(term in query_lower for term in ("balance sheet", "assets", "liabilities")):
+        return "balance"
+    if any(term in query_lower for term in ("cash flow", "cashflow")):
+        return "cashflow"
+    if any(term in query_lower for term in ("income statement", "revenue", "net income", "financials")):
+        return "income"
+    if any(term in query_lower for term in ("metric", "metrics", "pe ratio", "valuation")):
+        return "metrics"
+    if any(term in query_lower for term in ("real time", "realtime", "live quote")):
+        return "realtime"
+    return "quote"
 
 # ══════════════════════════════════════════════════════════════════════════════
 # FAST ROUTER
@@ -180,6 +254,12 @@ def upload_node(state: State) -> dict:
 @traceable(run_type="chain")
 def model_node(state: State) -> dict:
     """Main LLM node — handles internal data queries (non-SQL), not Finance or SQL"""
+    last_message = state["messages"][-1] if state["messages"] else None
+
+    if getattr(last_message, "type", "") == "human" and is_file_inventory_query(last_message):
+        response = AIMessage(content=list_available_files.invoke({}))
+        return {"messages": [response]}
+
     messages = [SystemMessage(content=_prompts.system)] + list(state["messages"])
     response = llm_with_tools.invoke(messages)
     return {"messages": [response]}
@@ -196,17 +276,22 @@ def sql_node(state: State) -> dict:
 @traceable(run_type="chain")
 def finance_node(state: State) -> dict:
     """Finance node — public company / market queries."""
-    messages = [SystemMessage(content=_prompts.finance)] + list(state["messages"])
     last_message = state["messages"][-1] if state["messages"] else None
     last_message_type = getattr(last_message, "type", "")
 
-    # Force a tool call on the first finance turn so stock questions use live data
-    # instead of a generic model-only answer. After tool output returns, switch back
-    # to the normal finance model so it can summarize and stop cleanly.
     if last_message_type == "human":
-        response = llm_finance_first_pass.invoke(messages)
-    else:
-        response = llm_finance.invoke(messages)
+        query = str(getattr(last_message, "content", ""))
+        symbol = infer_finance_symbol(query)
+        if symbol:
+            data_type = infer_finance_data_type(query)
+            limit = 10 if data_type in {"history", "news"} else 3
+            result = get_financial_data.invoke(
+                {"symbol": symbol, "data_type": data_type, "limit": limit}
+            )
+            return {"messages": [AIMessage(content=result)]}
+
+    messages = [SystemMessage(content=_prompts.finance)] + list(state["messages"])
+    response = llm_finance.invoke(messages)
     return {"messages": [response]}
 
 

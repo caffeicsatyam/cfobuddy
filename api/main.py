@@ -235,6 +235,11 @@ def build_index_with_status() -> None:
         indexing_status = {"status": "error", "message": str(exc)}
 
 
+@app.on_event("startup")
+async def ensure_initial_csv_load() -> None:
+    await asyncio.to_thread(load_csvs_to_neon)
+
+
 # ==========================
 # HEALTH
 # ==========================

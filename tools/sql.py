@@ -3,6 +3,7 @@ import json
 from dotenv import load_dotenv
 from langchain_core.tools import tool
 from sqlalchemy import create_engine, text, inspect
+from load_data import ensure_csv_tables_loaded
 
 load_dotenv()
 
@@ -18,6 +19,7 @@ def get_schema_context() -> str:
 
 def get_available_tables() -> dict:
     """Get all tables and their columns from Neon."""
+    ensure_csv_tables_loaded()
     inspector = inspect(engine)
     tables = {}
     for table_name in inspector.get_table_names():
@@ -26,6 +28,12 @@ def get_available_tables() -> dict:
         columns = [col["name"] for col in inspector.get_columns(table_name)]
         tables[table_name] = columns
     return tables
+
+
+def get_table_list_inline() -> str:
+    """Return available table names for tool documentation/examples."""
+    tables = get_available_tables()
+    return ", ".join(sorted(tables.keys())) or "(none yet)"
 
 
 def format_results(rows, columns) -> str:
@@ -119,6 +127,7 @@ def sql_query(sql: str) -> str:
         return "Only SELECT queries are allowed for safety."
 
     try:
+        ensure_csv_tables_loaded()
         with engine.connect() as conn:
             result = conn.execute(text(sql))
             rows = result.fetchall()

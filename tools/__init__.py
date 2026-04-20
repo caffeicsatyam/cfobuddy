@@ -28,11 +28,13 @@ all_tools = [
 web_search_tools = [web_search]
 web_search_tool_node = ToolNode(web_search_tools)
 
-# Basic internal tools (documents, files, charts)
+
 basic_tools = [
     search_financial_docs, 
     exact_lookup, 
     list_available_files, 
+    list_tables,
+    get_sql_examples,
     generate_chart, 
     prepare_chart_data,
     sql_query
