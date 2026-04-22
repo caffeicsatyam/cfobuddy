@@ -1,36 +1,52 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# CFO Buddy — Frontend 🎨
 
-## Getting Started
+A premium, ChatGPT-inspired interface for the CFO Buddy financial assistant. Built with Next.js 15+, React, and CSS Modules.
 
-First, run the development server:
+## 🚀 Features
+
+- **ChatGPT UI** — Warm dark theme, collapsible sidebar, and centered chat layout.
+- **Suggestion Chips** — Quick access to common financial analysis prompts.
+- **Interactive Charts** — Seamless rendering of generated Plotly charts.
+- **Responsive Design** — Optimized for both desktop and mobile views.
+- **Smooth UX** — Thread-based conversation management and typing indicators.
+
+## 🛠 Setup & Development
+
+### 1. Install Dependencies
+
+```bash
+npm install
+```
+
+### 2. Environment Variables
+
+Create `.env.local`:
+
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8000
+```
+
+### 3. Run Development Server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The app will be available at [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 📁 Architecture
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `/src/app` — Page routes (Landing and Dashboard).
+- `/src/components` — Reusable UI components (Sidebar, ChatArea, etc.).
+- `/src/lib` — API clients, types, and utility functions.
+- `/public` — Static assets and icons.
 
-## Learn More
+## 🎨 Design System
 
-To learn more about Next.js, take a look at the following resources:
+CFO Buddy uses a custom CSS-variable based design system defined in `src/app/globals.css`. 
+- **Colors**: Deep charcoal (#212121) and Emerald green (#10a37f).
+- **Fonts**: Inter and Manrope for a modern, professional look.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+---
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+MIT © [caffeicsatyam](https://github.com/caffeicsatyam)

@@ -3,27 +3,13 @@ import base64
 import hashlib
 import hmac
 import json
-<<<<<<< HEAD
-import jwt
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
-from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Depends, Security
-from fastapi.responses import FileResponse
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi import BackgroundTasks
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from langchain_core.messages import HumanMessage 
-from build_index import build_index         
-from pydantic import BaseModel
-from typing import Optional
-=======
 import os
 import secrets
 import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
 
->>>>>>> satyam
 from dotenv import load_dotenv
 from fastapi import (
     APIRouter,
@@ -50,6 +36,7 @@ load_dotenv()
 
 logger = configure_logging()
 
+# Config
 LEGACY_API_KEY = os.getenv("CFO_BUDDY_API_KEY", "").strip()
 JWT_SECRET = os.getenv("CFO_BUDDY_JWT_SECRET", "").strip() or LEGACY_API_KEY
 AUTH_USERNAME = os.getenv("CFO_BUDDY_AUTH_USERNAME", "admin").strip()
@@ -61,19 +48,8 @@ if not JWT_SECRET:
     raise RuntimeError("Authentication is not configured")
 
 if not AUTH_PASSWORD:
-    logger.error(
-        "No login password configured. Set CFO_BUDDY_AUTH_PASSWORD or CFO_BUDDY_API_KEY."
-    )
+    logger.error("No login password configured. Set CFO_BUDDY_AUTH_PASSWORD or CFO_BUDDY_API_KEY.")
     raise RuntimeError("Login password is not configured")
-
-if not LEGACY_API_KEY:
-    logger.warning(
-        "CFO_BUDDY_API_KEY is not set. Legacy bearer auth is disabled; JWT login remains enabled."
-    )
-
-JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", EXPECTED_API_KEY)
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 # 1 day expiration
 
 app = FastAPI(
     title="CFOBuddy AI",
@@ -85,8 +61,10 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",
+        "http://localhost:3001",
         "http://localhost:5173",
         "http://127.0.0.1:3000",
+        "http://127.0.0.1:3001",
         "http://127.0.0.1:5173",
     ],
     allow_origin_regex=(
@@ -104,58 +82,22 @@ app.add_middleware(
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login", auto_error=False)
 
-<<<<<<< HEAD
-
-def require_api_key(
-    credentials: HTTPAuthorizationCredentials = Security(api_key_scheme),
-):
-    if credentials is None or credentials.scheme.lower() != "bearer":
-        raise HTTPException(status_code=401, detail="Invalid API key")
-
-    token = credentials.credentials
-    try:
-        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[ALGORITHM])
-        return payload
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token has expired")
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid token")
-
-# Global variable to track indexing status
-indexing_status = {"status": "ready", "message": "........"}
-def build_index_with_status():
-    global indexing_status
-    indexing_status = {"status": "indexing", "message": "Building index"}
-    try:
-        build_index()
-        indexing_status = {"status" : "ready", "message": "Index built successfully"}
-    except Exception as e:
-        indexing_status = {"status": "error", "message": str(e)}
-    
-
-router = APIRouter(dependencies=[Depends(require_api_key)])
-
-DATA_FOLDER = "data"
-=======
+# Folders
 DATA_FOLDER = Path("data")
 CHARTS_FOLDER = Path("static/charts")
->>>>>>> satyam
 ALLOWED_EXTENSIONS = {"csv", "pdf", "xlsx", "xls", "docx"}
 
-
+# Auth Helpers
 def _b64url_encode(data: bytes) -> str:
     return base64.urlsafe_b64encode(data).decode("utf-8").rstrip("=")
-
 
 def _b64url_decode(data: str) -> bytes:
     padding = "=" * (-len(data) % 4)
     return base64.urlsafe_b64decode(data + padding)
 
-
 def _sign(message: bytes) -> str:
     digest = hmac.new(JWT_SECRET.encode("utf-8"), message, hashlib.sha256).digest()
     return _b64url_encode(digest)
-
 
 def create_access_token(subject: str) -> str:
     now = int(time.time())
@@ -165,15 +107,10 @@ def create_access_token(subject: str) -> str:
         "iat": now,
         "exp": now + JWT_EXPIRES_IN_SECONDS,
     }
-    header_segment = _b64url_encode(
-        json.dumps(header, separators=(",", ":"), sort_keys=True).encode("utf-8")
-    )
-    payload_segment = _b64url_encode(
-        json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
-    )
+    header_segment = _b64url_encode(json.dumps(header, separators=(",", ":"), sort_keys=True).encode("utf-8"))
+    payload_segment = _b64url_encode(json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8"))
     signing_input = f"{header_segment}.{payload_segment}".encode("utf-8")
     return f"{header_segment}.{payload_segment}.{_sign(signing_input)}"
-
 
 def decode_access_token(token: str) -> dict[str, Any]:
     try:
@@ -195,112 +132,56 @@ def decode_access_token(token: str) -> dict[str, Any]:
     if exp <= int(time.time()):
         raise HTTPException(status_code=401, detail="Token has expired")
 
-    if not payload.get("sub"):
-        raise HTTPException(status_code=401, detail="Invalid token subject")
-
     return payload
 
-
 def verify_user(username: str, password: str) -> bool:
-    return secrets.compare_digest(username, AUTH_USERNAME) and secrets.compare_digest(
-        password,
-        AUTH_PASSWORD,
-    )
-
+    return secrets.compare_digest(username, AUTH_USERNAME) and secrets.compare_digest(password, AUTH_PASSWORD)
 
 def require_auth(token: Optional[str] = Security(oauth2_scheme)) -> dict[str, Any]:
     if not token:
         raise HTTPException(status_code=401, detail="Missing bearer token")
-
     if LEGACY_API_KEY and secrets.compare_digest(token, LEGACY_API_KEY):
         return {"sub": "legacy-api-key", "auth_type": "api_key"}
-
     payload = decode_access_token(token)
     payload["auth_type"] = "jwt"
     return payload
 
-
-router = APIRouter(dependencies=[Depends(require_auth)])
-
-
-# ==========================
-# SCHEMAS
-# ==========================
-
-
+# Schemas
 class ChatRequest(BaseModel):
     message: str
     thread_id: str = "main"
-
 
 class ChatResponse(BaseModel):
     response: str
     thread_id: str
     chart: Optional[dict] = None
 
-
 class ThreadResponse(BaseModel):
     threads: list[str]
-
 
 class FileInfo(BaseModel):
     name: str
     type: str
     size: str
 
-<<<<<<< HEAD
-class FileResponseModels(BaseModel):
-=======
-
 class FileResponse(BaseModel):
->>>>>>> satyam
     files: list[FileInfo]
-
 
 class UploadResponse(BaseModel):
     message: str
     filename: str
-
-
-class ErrorResponse(BaseModel):
-    error: str
-
-<<<<<<< HEAD
-class LoginRequest(BaseModel):
-    username: str
-    password: str
-
-# ==========================
-# AUTH
-# ==========================
-
-@app.post("/token", tags=["Auth"])
-async def login(form_data: LoginRequest):
-    if form_data.username != "admin" or form_data.password != EXPECTED_API_KEY:
-        raise HTTPException(status_code=401, detail="Incorrect username or password")
-        
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    expire = datetime.now(timezone.utc) + access_token_expires
-    to_encode = {"sub": form_data.username, "exp": expire}
-    encoded_jwt = jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=ALGORITHM)
-    
-    return {"access_token": encoded_jwt, "token_type": "bearer"}
-=======
 
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     username: str
 
-
 class UserResponse(BaseModel):
     username: str
     auth_type: str
 
-
-# Global variable to track indexing status
+# Status tracking
 indexing_status = {"status": "ready", "message": "Idle"}
-
 
 def build_index_with_status() -> None:
     global indexing_status
@@ -312,37 +193,18 @@ def build_index_with_status() -> None:
         logger.exception("Index build failed")
         indexing_status = {"status": "error", "message": str(exc)}
 
-
 @app.on_event("startup")
 async def ensure_initial_csv_load() -> None:
     await asyncio.to_thread(load_csvs_to_neon)
 
->>>>>>> satyam
-
-# ==========================
-# HEALTH
-# ==========================
-
-
+# Routes
 @app.get("/", tags=["Health"])
 async def root() -> dict[str, str]:
-    return {
-        "name": "CFO Buddy API",
-        "version": "1.0.0",
-        "status": "running",
-        "docs": "/docs",
-    }
-
+    return {"name": "CFO Buddy API", "version": "1.0.0", "status": "running", "docs": "/docs"}
 
 @app.get("/health", tags=["Health"])
 async def health() -> dict[str, str]:
     return {"status": "ok"}
-
-
-# ==========================
-# AUTH
-# ==========================
-
 
 @app.post("/auth/login", response_model=TokenResponse, tags=["Auth"])
 async def login(form_data: OAuth2PasswordRequestForm = Depends()) -> TokenResponse:
@@ -352,10 +214,8 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()) -> TokenRespon
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-
     token = create_access_token(form_data.username)
     return TokenResponse(access_token=token, username=form_data.username)
-
 
 @app.get("/auth/me", response_model=UserResponse, tags=["Auth"])
 async def read_current_user(payload: dict[str, Any] = Depends(require_auth)) -> UserResponse:
@@ -364,98 +224,54 @@ async def read_current_user(payload: dict[str, Any] = Depends(require_auth)) -> 
         auth_type=str(payload.get("auth_type", "jwt")),
     )
 
-
-# ==========================
-# PARSER
-# ==========================
-
-
 def parse_response(messages: list[Any]) -> tuple[str, Optional[dict[str, Any]]]:
     text = ""
     chart = None
     for msg in messages:
         content = msg.content
-        if isinstance(content, list):
-            for block in content:
-                if isinstance(block, dict) and block.get("type") == "text":
-                    text += block.get("text", "")
-        elif isinstance(content, str):
-            # Extract chart metadata from tool results (CHART_JSON) or AI messages (CHART_DATA)
+        if isinstance(content, str):
             for marker in ("CHART_JSON:", "CHART_DATA:"):
                 if marker in content:
                     try:
                         json_str = content.split(marker, maxsplit=1)[1].strip()
-                        # Handle case where there's content after the JSON
-                        # Try to find the end of the JSON object
-                        chart = json.loads(json_str)
-                    except json.JSONDecodeError:
-                        # The JSON might have trailing text; try to isolate it
-                        try:
-                            brace_count = 0
-                            end_idx = 0
-                            for i, ch in enumerate(json_str):
-                                if ch == '{':
-                                    brace_count += 1
-                                elif ch == '}':
-                                    brace_count -= 1
-                                    if brace_count == 0:
-                                        end_idx = i + 1
-                                        break
-                            if end_idx > 0:
-                                chart = json.loads(json_str[:end_idx])
-                        except Exception:
-                            logger.warning("Failed to parse chart payload from response")
+                        brace_count = 0
+                        end_idx = 0
+                        for i, ch in enumerate(json_str):
+                            if ch == '{': brace_count += 1
+                            elif ch == '}':
+                                brace_count -= 1
+                                if brace_count == 0:
+                                    end_idx = i + 1
+                                    break
+                        if end_idx > 0:
+                            chart = json.loads(json_str[:end_idx])
+                        else:
+                            chart = json.loads(json_str)
                     except Exception:
-                        logger.warning("Failed to parse chart payload from response")
+                        logger.warning("Failed to parse chart payload")
                     break
-
+            
             if getattr(msg, "type", "") == "ai":
-                # Strip CHART_JSON from the displayed text
                 clean = content
-                if "CHART_JSON:" in clean:
-                    clean = clean.split("CHART_JSON:")[0].strip()
-                if "CHART_DATA:" in clean:
-                    clean = clean.split("CHART_DATA:")[0].strip()
+                if "CHART_JSON:" in clean: clean = clean.split("CHART_JSON:")[0].strip()
+                if "CHART_DATA:" in clean: clean = clean.split("CHART_DATA:")[0].strip()
                 text = clean
     return text.strip(), chart
 
-
-def sanitize_filename(filename: str) -> str:
-    cleaned = Path(filename).name.strip()
-    if not cleaned:
-        raise HTTPException(status_code=400, detail="Invalid filename")
-    return cleaned
-
-
-def validate_extension(filename: str) -> None:
-    extension = Path(filename).suffix.lower().lstrip(".")
-    if extension not in ALLOWED_EXTENSIONS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"File type not allowed. Supported: {', '.join(sorted(ALLOWED_EXTENSIONS))}",
-        )
-
-
-# ==========================
-# ROUTES
-# ==========================
-
+router = APIRouter(dependencies=[Depends(require_auth)])
 
 @router.get("/threads", response_model=ThreadResponse)
 async def get_threads() -> ThreadResponse:
     from core.memory import retrieve_all_threads
-
     try:
         threads = retrieve_all_threads()
         return ThreadResponse(threads=threads if threads else ["main"])
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
-
+        raise HTTPException(status_code=500, detail=str(exc))
 
 @router.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest) -> ChatResponse:
     from core.graph import CFOBuddy
-
     config = {"configurable": {"thread_id": request.thread_id}}
     try:
         response = await asyncio.to_thread(
@@ -467,83 +283,33 @@ async def chat(request: ChatRequest) -> ChatResponse:
         return ChatResponse(response=text, thread_id=request.thread_id, chart=chart)
     except Exception as exc:
         logger.exception("Chat request failed")
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail=str(exc))
 
-
-<<<<<<< HEAD
-@router.get("/files", response_model=FileResponseModels)
-async def list_files():
-    if not os.path.exists(DATA_FOLDER):
-        return FileResponseModels(files=[])
-    files = []
-    for f in os.listdir(DATA_FOLDER):
-        ext = os.path.splitext(f)[1].lower()
-        if ext.lstrip(".") in ALLOWED_EXTENSIONS:
-            size = os.path.getsize(os.path.join(DATA_FOLDER, f))
-            files.append(FileInfo(name=f, type=ext.lstrip(".").upper(), size=f"{size/1024:.1f} KB"))
-    return FileResponseModels(files=files)
-=======
 @router.get("/files", response_model=FileResponse)
 async def list_files() -> FileResponse:
     if not DATA_FOLDER.exists():
         return FileResponse(files=[])
-
-    files: list[FileInfo] = []
+    files = []
     for path in DATA_FOLDER.iterdir():
         if path.is_file() and path.suffix.lower().lstrip(".") in ALLOWED_EXTENSIONS:
-            size = path.stat().st_size
-            files.append(
-                FileInfo(
-                    name=path.name,
-                    type=path.suffix.lstrip(".").upper(),
-                    size=f"{size / 1024:.1f} KB",
-                )
-            )
+            files.append(FileInfo(name=path.name, type=path.suffix.lstrip(".").upper(), size=f"{path.stat().st_size / 1024:.1f} KB"))
     return FileResponse(files=files)
->>>>>>> satyam
-
 
 @router.post("/upload", response_model=UploadResponse)
 async def upload_file(file: UploadFile = File(...), background_tasks: BackgroundTasks = None) -> UploadResponse:
-    if not file.filename:
-        raise HTTPException(status_code=400, detail="No file selected")
-
-    filename = sanitize_filename(file.filename)
-    validate_extension(filename)
-
+    if not file.filename: raise HTTPException(status_code=400, detail="No file selected")
     DATA_FOLDER.mkdir(parents=True, exist_ok=True)
-    filepath = DATA_FOLDER / filename
+    filepath = DATA_FOLDER / Path(file.filename).name
     content = await file.read()
     filepath.write_bytes(content)
-
-    extension = filepath.suffix.lower()
-
-    if background_tasks is None:
-        background_tasks = BackgroundTasks()
-
-    if extension == ".csv":
-        logger.info("CSV file uploaded: %s", filename)
-        background_tasks.add_task(load_csvs_to_neon)
-    else:
-        logger.info(
-            "File uploaded: %s | type: %s | size: %.1f KB",
-            filename,
-            extension,
-            len(content) / 1024,
-        )
-
+    if background_tasks is None: background_tasks = BackgroundTasks()
+    if filepath.suffix.lower() == ".csv": background_tasks.add_task(load_csvs_to_neon)
     background_tasks.add_task(build_index_with_status)
-
-    return UploadResponse(
-        message=f"'{filename}' uploaded successfully",
-        filename=filename,
-    )
-
+    return UploadResponse(message=f"'{file.filename}' uploaded successfully", filename=file.filename)
 
 @router.get("/threads/{thread_id}/history")
 async def get_history(thread_id: str) -> dict[str, Any]:
     from core.graph import CFOBuddy
-
     config = {"configurable": {"thread_id": thread_id}}
     try:
         state = CFOBuddy.get_state(config)
@@ -551,43 +317,23 @@ async def get_history(thread_id: str) -> dict[str, Any]:
         return {
             "thread_id": thread_id,
             "messages": [
-                {
-                    "role": msg.type,
-                    "content": msg.content if isinstance(msg.content, str) else str(msg.content),
-                }
-                for msg in messages
-                if msg.type in ["human", "ai"]
+                {"role": msg.type, "content": msg.content if isinstance(msg.content, str) else str(msg.content)}
+                for msg in messages if msg.type in ["human", "ai"]
             ],
         }
     except Exception as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-
+        raise HTTPException(status_code=404, detail=str(exc))
 
 @router.get("/indexing_status")
 async def get_indexing_status() -> dict[str, str]:
     return indexing_status
 
-app.include_router(router)
-
-<<<<<<< HEAD
-
-@app.get('/charts/{filename}')
-async def serve_chart(filename: str):
-    """Serve chart images."""
-    chart_path = Path("static/charts") / filename
-    if chart_path.exists():
-        return FileResponse(chart_path, media_type='image/png')
-    raise HTTPException(status_code=404, detail="Chart not found")
-=======
 @app.get("/charts/{filename}", tags=["Charts"])
 async def serve_chart(filename: str) -> FastAPIFileResponse:
     chart_path = CHARTS_FOLDER / Path(filename).name
     if not chart_path.exists() or not chart_path.is_file():
         raise HTTPException(status_code=404, detail="Chart not found")
-    # Charts are interactive Plotly HTML files
     media = "text/html" if chart_path.suffix.lower() == ".html" else "image/png"
     return FastAPIFileResponse(chart_path, media_type=media)
 
-
 app.include_router(router)
->>>>>>> satyam
