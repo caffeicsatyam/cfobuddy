@@ -59,7 +59,6 @@ def exact_lookup(file_name: str, column: str, value: str) -> str:
 @tool  
 def list_available_files() -> str:
     """List all available files in the data folder including CSVs, PDFs, Excel and Word docs.
-    
     IMPORTANT: Call this tool ONLY ONCE per conversation. After receiving the file list,
     use the information to answer the user's question directly. Do NOT call this tool again.
     """

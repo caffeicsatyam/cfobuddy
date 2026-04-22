@@ -12,15 +12,18 @@ export default function Navbar() {
       <div className={styles.inner}>
         {/* Logo */}
         <Link href="/" className={styles.logo}>
-          <span className={styles.logoIcon}>◈</span>
+          <span className={styles.logoIcon}>✦</span>
           <span>CFOBuddy</span>
         </Link>
 
         {/* Desktop links */}
         <ul className={styles.links}>
-          {['Dashboard', 'Analytics', 'Strategy', 'Reports'].map((item) => (
+          {['Dashboard', 'Features', 'Pricing'].map((item) => (
             <li key={item}>
-              <Link href={item === 'Dashboard' ? '/dashboard' : '#'} className={styles.link}>
+              <Link
+                href={item === 'Dashboard' ? '/dashboard' : `#${item.toLowerCase()}`}
+                className={styles.link}
+              >
                 {item}
               </Link>
             </li>
@@ -30,7 +33,7 @@ export default function Navbar() {
         {/* CTA */}
         <div className={styles.actions}>
           <Link href="/dashboard" className="btn btn-primary btn-sm">
-            Launch App →
+            Try CFOBuddy →
           </Link>
           <button
             className={styles.burger}
@@ -47,10 +50,10 @@ export default function Navbar() {
       {/* Mobile menu */}
       {menuOpen && (
         <div className={styles.mobile}>
-          {['Dashboard', 'Analytics', 'Strategy', 'Reports'].map((item) => (
+          {['Dashboard', 'Features', 'Pricing'].map((item) => (
             <Link
               key={item}
-              href={item === 'Dashboard' ? '/dashboard' : '#'}
+              href={item === 'Dashboard' ? '/dashboard' : `#${item.toLowerCase()}`}
               className={styles.mobileLink}
               onClick={() => setMenuOpen(false)}
             >
@@ -58,7 +61,7 @@ export default function Navbar() {
             </Link>
           ))}
           <Link href="/dashboard" className="btn btn-primary btn-sm" onClick={() => setMenuOpen(false)}>
-            Launch App →
+            Try CFOBuddy →
           </Link>
         </div>
       )}

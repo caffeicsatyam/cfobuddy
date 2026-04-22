@@ -5,8 +5,8 @@ import styles from './LoadingStates.module.css';
 /* ─── Typing indicator (AI is responding) ─────────────────────────────────── */
 export function TypingIndicator() {
   return (
-    <div className={`${styles.bubble} ${styles.ai} fade-in`}>
-      <div className={styles.avatar}>◈</div>
+    <div className={styles.typingRow}>
+      <div className={styles.avatar}>✦</div>
       <div className={styles.typingContent}>
         <div className={styles.typingDots}>
           <span className="typing-dot" />

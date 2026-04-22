@@ -1,92 +1,263 @@
 import os
+import time
+import threading
+from typing import Callable, Any
 
 import yfinance as yf
-from twelvedata import TDClient
-from langchain_core.tools import tool
 from dotenv import load_dotenv
-from typing import Union
+from langchain_core.tools import tool
+from twelvedata import TDClient
 
 load_dotenv()
 
 TD_API_KEY = os.getenv("TWELVE_DATA_API_KEY")
-td = TDClient(apikey=TD_API_KEY)
+_td_client: TDClient | None = None
 
-# ==========================
-# HELPERS
-# ==========================
+
+# ── Twelve Data client (lazy singleton) ───────────────────────────────────────
+
+def get_td_client() -> TDClient:
+    global _td_client
+    if _td_client is not None:
+        return _td_client
+    if not TD_API_KEY:
+        raise RuntimeError("TWELVE_DATA_API_KEY is not set")
+    _td_client = TDClient(apikey=TD_API_KEY)
+    return _td_client
+
+
+# ── Timeout wrapper ────────────────────────────────────────────────────────────
+
+def _with_timeout(fn: Callable, timeout: int = 15, *args, **kwargs) -> Any:
+    """
+    Run fn(*args, **kwargs) in a daemon thread.
+    Raises TimeoutError if it doesn't finish within `timeout` seconds.
+    This prevents yfinance from hanging the entire process on slow networks
+    or Yahoo rate-limits — the single most common cause of crashes.
+    """
+    result = [None]
+    error  = [None]
+
+    def target():
+        try:
+            result[0] = fn(*args, **kwargs)
+        except Exception as e:
+            error[0] = e
+
+    t = threading.Thread(target=target, daemon=True)
+    t.start()
+    t.join(timeout)
+
+    if t.is_alive():
+        raise TimeoutError(f"{getattr(fn, '__name__', 'call')} timed out after {timeout}s")
+    if error[0] is not None:
+        raise error[0]
+    return result[0]
+
+
+# ── Retry wrapper ──────────────────────────────────────────────────────────────
+
+def _with_retry(fn: Callable, retries: int = 1, delay: float = 1.5) -> Any:
+    """
+    Retry fn() on transient errors (HTTP 429, connection reset).
+    Never retries TimeoutError — it will just hang again.
+    """
+    last_exc = None
+    for attempt in range(retries + 1):
+        try:
+            return fn()
+        except TimeoutError:
+            raise
+        except Exception as e:
+            last_exc = e
+            if attempt < retries:
+                time.sleep(delay * (attempt + 1))
+    raise last_exc
+
+
+# ── Symbol normalisation ───────────────────────────────────────────────────────
+
+# yfinance uses ^ prefix for indices; Twelve Data uses plain names or
+# doesn't support some indices at all. Keep two separate maps.
+_YF_ALIASES: dict[str, str] = {
+    # Indian indices
+    "NIFTY":        "^NSEI",
+    "NIFTY50":      "^NSEI",
+    "NIFTY 50":     "^NSEI",
+    "SENSEX":       "^BSESN",
+    "BANKNIFTY":    "^NSEBANK",
+    "BANK NIFTY":   "^NSEBANK",
+    "FINNIFTY":     "^CNXFIN",
+    "MIDCAP":       "^CNXMIDCAP",
+    "NIFTYMIDCAP":  "^CNXMIDCAP",
+    "SMALLCAP":     "^CNXSMALLCAP",
+    "SPX":          "^GSPC",
+    "SP500":        "^GSPC",
+    "S&P500":       "^GSPC",
+    "DOW":          "^DJI",
+    "DOWJONES":     "^DJI",
+    "NASDAQ":       "^IXIC",
+    "VIX":          "^VIX",
+    # 
+    "BTC":          "BTC-USD",
+    "ETH":          "ETH-USD",
+    "BITCOIN":      "BTC-USD",
+    "ETHEREUM":     "ETH-USD",
+}
+
+
+_TD_ALIASES: dict[str, str | None] = {
+    "NIFTY":        None,
+    "NIFTY50":      None,
+    "NIFTY 50":     None,
+    "SENSEX":       None,
+    "BANKNIFTY":    None,
+    "BANK NIFTY":   None,
+    "FINNIFTY":     None,
+    "MIDCAP":       None,
+    "NIFTYMIDCAP":  None,
+    "SMALLCAP":     None,
+    "SPX":          "SPX",
+    "SP500":        "SPX",
+    "S&P500":       "SPX",
+    "DOW":          "DJI",
+    "DOWJONES":     "DJI",
+    "NASDAQ":       "IXIC",
+    "VIX":          "VIX",
+    # Crypto
+    "BTC":          "BTC/USD",
+    "ETH":          "ETH/USD",
+    "BITCOIN":      "BTC/USD",
+    "ETHEREUM":     "ETH/USD",
+}
+
+
+def _resolve_symbol(raw: str) -> str:
+    """Resolve to yfinance symbol (used as the canonical symbol throughout)."""
+    cleaned = raw.upper().strip()
+    return _YF_ALIASES.get(cleaned, cleaned)
+
+
+def _resolve_td_symbol(yf_symbol: str) -> str | None:
+    """
+    Convert a yfinance symbol to its Twelve Data equivalent.
+    Returns None if Twelve Data doesn't support this symbol (e.g. Indian indices).
+    Strips the ^ prefix for symbols not in the alias map as a best-effort fallback.
+    """
+    upper = yf_symbol.upper()
+
+    # Check reverse map: if the yf symbol is a value in _YF_ALIASES,
+    # find the original key and look it up in _TD_ALIASES.
+    yf_reverse = {v: k for k, v in _YF_ALIASES.items()}
+    original_key = yf_reverse.get(upper)
+    if original_key and original_key in _TD_ALIASES:
+        return _TD_ALIASES[original_key]  # may be None — caller handles it
+
+    # Plain symbol passthrough (e.g. AAPL, MSFT, RELIANCE.NS)
+    return upper
+
+
+# ── Formatting helpers ─────────────────────────────────────────────────────────
 
 def format_number(value) -> str:
     if value is None:
         return "N/A"
     try:
-        value = float(value)
-        if abs(value) >= 1_000_000_000:
-            return f"${value / 1_000_000_000:.2f}B"
-        elif abs(value) >= 1_000_000:
-            return f"${value / 1_000_000:.2f}M"
-        else:
-            return f"${value:,.2f}"
-    except:
+        value   = float(value)
+        sign    = "-" if value < 0 else ""
+        abs_val = abs(value)
+        if abs_val >= 1_000_000_000:
+            return f"{sign}${abs_val / 1_000_000_000:.2f}B"
+        if abs_val >= 1_000_000:
+            return f"{sign}${abs_val / 1_000_000:.2f}M"
+        return f"{sign}${abs_val:,.2f}"
+    except Exception:
         return str(value)
 
 
-# ==========================
-# YFINANCE HANDLERS (primary)
-# ==========================
+def _has_real_data(text: str) -> bool:
+    if not text or "No data found" in text or "error" in text.lower():
+        return False
+    value_lines = [l for l in text.splitlines() if ":" in l]
+    if not value_lines:
+        return False
+    na_count = sum(1 for l in value_lines if l.strip().endswith("N/A"))
+    return na_count < len(value_lines)
+
+
+# ── yfinance helpers ───────────────────────────────────────────────────────────
+
+def _yf_info(symbol: str) -> dict:
+    """Fetch ticker.info with a hard 15s timeout."""
+    return _with_timeout(lambda: yf.Ticker(symbol).info, 15)
+
 
 def _yf_quote(symbol: str) -> str:
-    info = yf.Ticker(symbol).info
+    info = _yf_info(symbol)
     if not info:
         return f"No data found for {symbol}."
-    return f"""
-    {info.get('longName', symbol)} ({symbol})
-Price:        ${info.get('currentPrice', 'N/A')}
-Change:       {info.get('regularMarketChange', 'N/A')} ({info.get('regularMarketChangePercent', 'N/A')}%)
-Open/High/Low: ${info.get('open', 'N/A')} / ${info.get('dayHigh', 'N/A')} / ${info.get('dayLow', 'N/A')}
-Volume:       {info.get('volume', 'N/A')}
-Market Cap:   {format_number(info.get('marketCap'))}
-PE Ratio:     {info.get('trailingPE', 'N/A')}  |  EPS: {info.get('trailingEps', 'N/A')}
-52W High/Low: ${info.get('fiftyTwoWeekHigh', 'N/A')} / ${info.get('fiftyTwoWeekLow', 'N/A')}
-Exchange:     {info.get('exchange', 'N/A')}""".strip()
+    # Indices use regularMarketPrice, not currentPrice
+    price = info.get('currentPrice') or info.get('regularMarketPrice', 'N/A')
+    return f"""{info.get('longName', symbol)} ({symbol})
+    Price:         ${price}
+    Change:        {info.get('regularMarketChange', 'N/A')} ({info.get('regularMarketChangePercent', 'N/A')}%)
+    Open/High/Low: ${info.get('open', 'N/A')} / ${info.get('dayHigh', 'N/A')} / ${info.get('dayLow', 'N/A')}
+    Volume:        {info.get('volume', 'N/A')}
+    Market Cap:    {format_number(info.get('marketCap'))}
+    PE Ratio:      {info.get('trailingPE', 'N/A')}  |  EPS: {info.get('trailingEps', 'N/A')}
+    52W High/Low:  ${info.get('fiftyTwoWeekHigh', 'N/A')} / ${info.get('fiftyTwoWeekLow', 'N/A')}
+    Exchange:      {info.get('exchange', 'N/A')}""".strip()
 
 
-def _yf_income(symbol: str, limit: int) -> str:
-    df = yf.Ticker(symbol).financials
+def _yf_income(symbol: str, period: str, limit: int) -> str:
+    ticker = yf.Ticker(symbol)
+    df = _with_timeout(
+        lambda: ticker.quarterly_financials if period == "quarterly" else ticker.financials,
+        15,
+    )
     if df is None or df.empty:
         return f"No income statement found for {symbol}."
-    result = [f"Income Statement — {symbol}"]
+    result = [f"Income Statement ({'Quarterly' if period == 'quarterly' else 'Annual'}) - {symbol}"]
     for col in list(df.columns)[:limit]:
         result.append(f"""
-Period:        {str(col)[:10]}
-Revenue:       {format_number(df[col].get('Total Revenue'))}
-Gross Profit:  {format_number(df[col].get('Gross Profit'))}
-Operating Inc: {format_number(df[col].get('Operating Income'))}
-Net Income:    {format_number(df[col].get('Net Income'))}
-EBITDA:        {format_number(df[col].get('EBITDA'))}""")
+            Period:        {str(col)[:10]}
+            Revenue:       {format_number(df[col].get('Total Revenue'))}
+            Gross Profit:  {format_number(df[col].get('Gross Profit'))}
+            Operating Inc: {format_number(df[col].get('Operating Income'))}
+            Net Income:    {format_number(df[col].get('Net Income'))}
+            EBITDA:        {format_number(df[col].get('EBITDA'))}""")
     return "\n---".join(result)
 
 
-def _yf_balance(symbol: str, limit: int) -> str:
-    df = yf.Ticker(symbol).balance_sheet
+def _yf_balance(symbol: str, period: str, limit: int) -> str:
+    ticker = yf.Ticker(symbol)
+    df = _with_timeout(
+        lambda: ticker.quarterly_balance_sheet if period == "quarterly" else ticker.balance_sheet,
+        15,
+    )
     if df is None or df.empty:
         return f"No balance sheet found for {symbol}."
-    result = [f"Balance Sheet — {symbol}"]
+    result = [f"Balance Sheet ({'Quarterly' if period == 'quarterly' else 'Annual'}) - {symbol}"]
     for col in list(df.columns)[:limit]:
         result.append(f"""
-Period:             {str(col)[:10]}
-Total Assets:       {format_number(df[col].get('Total Assets'))}
-Total Liabilities:  {format_number(df[col].get('Total Liabilities Net Minority Interest'))}
-Total Equity:       {format_number(df[col].get('Stockholders Equity'))}
-Cash & Equiv:       {format_number(df[col].get('Cash And Cash Equivalents'))}
-Total Debt:         {format_number(df[col].get('Total Debt'))}""")
+        Period:             {str(col)[:10]}
+        Total Assets:       {format_number(df[col].get('Total Assets'))}
+        Total Liabilities:  {format_number(df[col].get('Total Liabilities Net Minority Interest'))}
+        Total Equity:       {format_number(df[col].get('Stockholders Equity'))}
+        Cash & Equiv:       {format_number(df[col].get('Cash And Cash Equivalents'))}
+        Total Debt:         {format_number(df[col].get('Total Debt'))}""")
     return "\n---".join(result)
 
 
-def _yf_cashflow(symbol: str, limit: int) -> str:
-    df = yf.Ticker(symbol).cashflow
+def _yf_cashflow(symbol: str, period: str, limit: int) -> str:
+    ticker = yf.Ticker(symbol)
+    df = _with_timeout(
+        lambda: ticker.quarterly_cashflow if period == "quarterly" else ticker.cashflow,
+        15,
+    )
     if df is None or df.empty:
         return f"No cash flow found for {symbol}."
-    result = [f" Cash Flow — {symbol}"]
+    result = [f"Cash Flow ({'Quarterly' if period == 'quarterly' else 'Annual'}) - {symbol}"]
     for col in list(df.columns)[:limit]:
         result.append(f"""
         Period:         {str(col)[:10]}
@@ -98,162 +269,197 @@ def _yf_cashflow(symbol: str, limit: int) -> str:
     return "\n---".join(result)
 
 
-def _yf_metrics(symbol: str) -> str:
-    info = yf.Ticker(symbol).info
+def _yf_metrics(symbol: str, **_) -> str:
+    info = _yf_info(symbol)
     if not info:
         return f"No metrics found for {symbol}."
-    return f"""
-    Key Metrics — {symbol}
-    PE Ratio:       {info.get('trailingPE', 'N/A')}
-    Forward PE:     {info.get('forwardPE', 'N/A')}
-    PB Ratio:       {info.get('priceToBook', 'N/A')}
-    EV/EBITDA:      {info.get('enterpriseToEbitda', 'N/A')}
-    ROE:            {info.get('returnOnEquity', 'N/A')}
-    ROA:            {info.get('returnOnAssets', 'N/A')}
-    Net Margin:     {info.get('profitMargins', 'N/A')}
-    Current Ratio:  {info.get('currentRatio', 'N/A')}
-    Debt/Equity:    {info.get('debtToEquity', 'N/A')}
-    Dividend Yield: {info.get('dividendYield', 'N/A')}""".strip()
+    return f"""Key Metrics - {symbol}
+        PE Ratio:       {info.get('trailingPE', 'N/A')}
+        Forward PE:     {info.get('forwardPE', 'N/A')}
+        PB Ratio:       {info.get('priceToBook', 'N/A')}
+        EV/EBITDA:      {info.get('enterpriseToEbitda', 'N/A')}
+        ROE:            {info.get('returnOnEquity', 'N/A')}
+        ROA:            {info.get('returnOnAssets', 'N/A')}
+        Net Margin:     {info.get('profitMargins', 'N/A')}
+        Current Ratio:  {info.get('currentRatio', 'N/A')}
+        Debt/Equity:    {info.get('debtToEquity', 'N/A')}
+        Dividend Yield: {info.get('dividendYield', 'N/A')}""".strip()
 
 
-def _yf_ratings(symbol: str) -> str:
+def _yf_ratings(symbol: str, period: str, limit: int) -> str:
     try:
-        recs = yf.Ticker(symbol).recommendations
+        recs = _with_timeout(lambda: yf.Ticker(symbol).recommendations, 15)
         if recs is None or recs.empty:
             raise ValueError("empty")
-        result = [f" Analyst Ratings — {symbol}"]
-        for _, row in recs.tail(5).iterrows():
+        result = [f"Analyst Ratings - {symbol}"]
+        for _, row in recs.tail(limit).iterrows():
             result.append(
                 f"{str(row.name)[:10]} | {row.get('Firm', 'N/A')} | "
                 f"{row.get('To Grade', 'N/A')} (from {row.get('From Grade', 'N/A')})"
             )
         return "\n".join(result)
-    except:
+    except Exception:
         return f"No analyst ratings available for {symbol}."
 
 
-def _yf_news(symbol: str, limit: int) -> str:
-    news = yf.Ticker(symbol).news
+def _yf_news(symbol: str, period: str, limit: int) -> str:
+    news = _with_timeout(lambda: yf.Ticker(symbol).news, 15)
     if not news:
         return f"No news found for {symbol}."
-    result = [f" Latest News — {symbol}"]
+    result = [f"Latest News - {symbol}"]
     for article in news[:limit]:
-        content = article.get('content', {})
-        title = content.get('title', 'No title')
-        url = content.get('canonicalUrl', {}).get('url', '')
-        date = content.get('pubDate', '')[:10]
-        result.append(f"• [{date}] {title}\n  {url}")
+        content = article.get("content", {})
+        title   = content.get("title", "No title")
+        url     = content.get("canonicalUrl", {}).get("url", "")
+        date    = content.get("pubDate", "")[:10]
+        result.append(f"- [{date}] {title}\n  {url}")
     return "\n\n".join(result)
 
 
-def _yf_profile(symbol: str) -> str:
-    info = yf.Ticker(symbol).info
+def _yf_profile(symbol: str, **_) -> str:
+    info = _yf_info(symbol)
     if not info:
         return f"No profile found for {symbol}."
-    return f"""
-    {info.get('longName', symbol)} ({symbol})
+    summary = info.get("longBusinessSummary", "N/A")
+    if len(summary) > 400:
+        cutoff  = summary.rfind(".", 0, 400)
+        summary = summary[: cutoff + 1] if cutoff != -1 else summary[:400] + "…"
+    return f"""{info.get('longName', symbol)} ({symbol})
 Sector:     {info.get('sector', 'N/A')}  |  Industry: {info.get('industry', 'N/A')}
 Exchange:   {info.get('exchange', 'N/A')}  |  Country: {info.get('country', 'N/A')}
 Employees:  {info.get('fullTimeEmployees', 'N/A')}
 Market Cap: {format_number(info.get('marketCap'))}
 Website:    {info.get('website', 'N/A')}
 
-{info.get('longBusinessSummary', 'N/A')[:400]}...""".strip()
+{summary}""".strip()
 
 
-# ==========================
-# TWELVE DATA HANDLERS (complement — price history, real-time)
-# ==========================
+# ── Twelve Data handlers ───────────────────────────────────────────────────────
 
-def _td_price_history(symbol: str, interval: str = "1day", limit: int = 30) -> str:
-    """Get OHLCV price history — Twelve Data strength."""
+_VALID_INTERVALS = {
+    "1min", "5min", "15min", "30min",
+    "1h", "2h", "4h",
+    "1day", "1week", "1month",
+}
+
+
+def _td_price_history(symbol: str, period: str, limit: int) -> str:
+    # Resolve to TD-compatible symbol; bail early for unsupported ones (e.g. Indian indices)
+    td_symbol = _resolve_td_symbol(symbol)
+    if td_symbol is None:
+        return (
+            f"Price history for {symbol} is not available via Twelve Data. "
+            f"Try data_type=\'quote\' which uses yfinance for Indian indices."
+        )
+    interval = period if period in _VALID_INTERVALS else "1day"
     try:
-        ts = td.time_series(
-            symbol=symbol,
-            interval=interval,
-            outputsize=limit
-        ).as_json()
+        ts = _with_timeout(
+            lambda: get_td_client().time_series(
+                symbol=td_symbol, interval=interval, outputsize=limit,
+            ).as_json(),
+            20,
+        )
         if not ts:
             return f"No price history found for {symbol}."
-        result = [f" Price History — {symbol} ({interval})"]
-        for bar in ts[:10]:
+        result = [f"Price History - {symbol} ({interval})"]
+        for bar in ts:
             result.append(
                 f"{bar.get('datetime')} | O: {bar.get('open')} "
                 f"H: {bar.get('high')} L: {bar.get('low')} "
                 f"C: {bar.get('close')} V: {bar.get('volume', 'N/A')}"
             )
         return "\n".join(result)
-    except Exception as e:
-        return f"Twelve Data error: {e}"
+    except TimeoutError:
+        return f"Twelve Data timed out fetching history for {symbol}."
+    except Exception as exc:
+        return f"Twelve Data error: {exc}"
 
 
-def _td_quote(symbol: str) -> str:
-    """Real-time quote from Twelve Data."""
+def _td_quote(symbol: str, **_) -> str:
+    td_symbol = _resolve_td_symbol(symbol)
+    if td_symbol is None:
+        return f"Real-time quote for {symbol} is not available via Twelve Data."
     try:
-        quote = td.quote(symbol=symbol).as_json()
+        quote = _with_timeout(
+            lambda: get_td_client().quote(symbol=td_symbol).as_json(),
+            15,
+        )
         if not quote:
             return f"No quote found for {symbol}."
-        return f"""
-    {quote.get('name', symbol)} ({symbol}) — Twelve Data
-Price:         ${quote.get('close', 'N/A')}
-Change:        {quote.get('change', 'N/A')} ({quote.get('percent_change', 'N/A')}%)
-Open/High/Low: ${quote.get('open', 'N/A')} / ${quote.get('high', 'N/A')} / ${quote.get('low', 'N/A')}
-Volume:        {quote.get('volume', 'N/A')}
-52W High/Low:  ${quote.get('fifty_two_week', {}).get('high', 'N/A')} / ${quote.get('fifty_two_week', {}).get('low', 'N/A')}
-Market Open:   {quote.get('is_market_open', 'N/A')}""".strip()
-    except Exception as e:
-        return f"Twelve Data error: {e}"
+        return f"""{quote.get('name', symbol)} ({symbol}) - Twelve Data
+            Price:         ${quote.get('close', 'N/A')}
+            Change:        {quote.get('change', 'N/A')} ({quote.get('percent_change', 'N/A')}%)
+            Open/High/Low: ${quote.get('open', 'N/A')} / ${quote.get('high', 'N/A')} / ${quote.get('low', 'N/A')}
+            Volume:        {quote.get('volume', 'N/A')}
+            52W High/Low:  ${quote.get('fifty_two_week', {}).get('high', 'N/A')} / ${quote.get('fifty_two_week', {}).get('low', 'N/A')}
+            Market Open:   {quote.get('is_market_open', 'N/A')}""".strip()
+    except TimeoutError:
+        return f"Twelve Data timed out fetching quote for {symbol}."
+    except Exception as exc:
+        return f"Twelve Data error: {exc}"
 
 
-# ==========================
-# HANDLER MAP
-# ==========================
+def _best_quote(symbol: str, **_) -> str:
+    """
+    Try yfinance with a 15s timeout and 1 retry.
+    Fall back to Twelve Data if yfinance times out or returns all-N/A data.
+    """
+    try:
+        result = _with_retry(lambda: _yf_quote(symbol), retries=1, delay=1.5)
+        if _has_real_data(result):
+            return result
+    except TimeoutError:
+        pass  # yfinance hung — go straight to Twelve Data
+    except Exception:
+        pass
+    return _td_quote(symbol)
+
+
+# ── Dispatch table ─────────────────────────────────────────────────────────────
 
 HANDLERS = {
-    # yfinance — fundamental data
-    "quote":    lambda s, p, l: _yf_quote(s),
-    "income":   lambda s, p, l: _yf_income(s, l),
-    "balance":  lambda s, p, l: _yf_balance(s, l),
-    "cashflow": lambda s, p, l: _yf_cashflow(s, l),
-    "metrics":  lambda s, p, l: _yf_metrics(s),
-    "ratings":  lambda s, p, l: _yf_ratings(s),
-    "news":     lambda s, p, l: _yf_news(s, l),
-    "profile":  lambda s, p, l: _yf_profile(s),
-    # Twelve Data — price/market data
-    "history":  lambda s, p, l: _td_price_history(s, limit=l),
-    "realtime": lambda s, p, l: _td_quote(s),
+    "quote":    _best_quote,
+    "income":   _yf_income,
+    "balance":  _yf_balance,
+    "cashflow": _yf_cashflow,
+    "metrics":  _yf_metrics,
+    "ratings":  _yf_ratings,
+    "news":     _yf_news,
+    "profile":  _yf_profile,
+    "history":  _td_price_history,
+    "realtime": _td_quote,
 }
 
-# ==========================
-# SINGLE UNIFIED TOOL
-# ==========================
+
+# ── Tool ───────────────────────────────────────────────────────────────────────
 
 @tool
-def get_financial_data(symbol: str, data_type: str, period: str = "annual", limit: Union[int, str] = 3) -> str:
+def get_financial_data(
+    symbol: str,
+    data_type: str,
+    period: str = "annual",
+    limit: int = 3,
+) -> str:
     """
-    Fetch any financial data for a publicly traded company.
-    Uses yfinance (fundamentals) and Twelve Data (price history & real-time).
+    Fetch financial data for any publicly traded company or index.
 
     Args:
-        symbol: Stock ticker e.g. 'AAPL', 'MSFT', 'GOOGL', 'TSLA'
-        data_type: Type of data:
-            'quote'    — live price, volume, market cap, PE (yfinance)
-            'income'   — revenue, net income, EBITDA (yfinance)
-            'balance'  — assets, liabilities, equity (yfinance)
-            'cashflow' — operating, free cash flow (yfinance)
-            'metrics'  — PE, ROE, margins, ratios (yfinance)
-            'ratings'  — analyst recommendations (yfinance)
-            'news'     — latest news articles (yfinance)
-            'profile'  — company overview (yfinance)
-            'history'  — OHLCV price history (Twelve Data)
-            'realtime' — real-time quote with 52W range (Twelve Data)
-        period: 'annual' or 'quarter' (default: 'annual')
-        limit: Number of periods or bars to return (default: 3)
+        symbol:    Ticker symbol, e.g. "AAPL", "RELIANCE.NS", "NIFTY", "SENSEX".
+                   For Indian stocks append .NS (NSE) or .BO (BSE).
+                   Common indices like NIFTY, SENSEX, BANKNIFTY, FINNIFTY
+                   are resolved automatically.
+        data_type: One of: quote, income, balance, cashflow, metrics,
+                   ratings, news, profile, history, realtime
+        period:    "annual" or "quarterly" for fundamentals.
+                   For history, pass a Twelve Data interval:
+                   1min, 5min, 15min, 1h, 1day (default), 1week, 1month
+        limit:     Number of periods / rows to return (default 3)
+
+    yfinance calls have a 15s timeout with 1 automatic retry.
+    Falls back to Twelve Data if yfinance times out or returns empty data.
     """
-    symbol = symbol.upper().strip()
+    symbol    = _resolve_symbol(symbol)
     data_type = data_type.lower().strip()
-    limit = int(limit)  # coerce here
-    period = str(period)
 
     if data_type not in HANDLERS:
         return (
@@ -261,4 +467,12 @@ def get_financial_data(symbol: str, data_type: str, period: str = "annual", limi
             f"Valid options: {', '.join(HANDLERS.keys())}"
         )
 
-    return HANDLERS[data_type](symbol, period, limit)
+    try:
+        return HANDLERS[data_type](symbol, period=period, limit=limit)
+    except TimeoutError:
+        return (
+            f"Request for {data_type} data on {symbol} timed out on both sources. "
+            f"Yahoo Finance may be rate-limiting — please try again in a few seconds."
+        )
+    except Exception as exc:
+        return f"Unable to fetch {data_type} data for {symbol}: {exc}"

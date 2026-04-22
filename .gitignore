@@ -41,3 +41,6 @@ req.txt
 static/
 templates/
 
+.claude
+.agents
+.vscode

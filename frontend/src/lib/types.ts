@@ -1,5 +1,3 @@
-// ─── Chat & Messaging ────────────────────────────────────────────────────────
-
 export type MessageRole = 'user' | 'assistant';
 
 export interface ChartData {
@@ -17,14 +15,10 @@ export interface Message {
   isLoading?: boolean;
 }
 
-// ─── Threads ─────────────────────────────────────────────────────────────────
-
 export interface Thread {
   id: string;
   label: string;
 }
-
-// ─── Files ───────────────────────────────────────────────────────────────────
 
 export interface UploadedFile {
   name: string;
@@ -32,7 +26,16 @@ export interface UploadedFile {
   size: string;
 }
 
-// ─── API Response Types ───────────────────────────────────────────────────────
+export interface AuthUser {
+  username: string;
+  auth_type: string;
+}
+
+export interface LoginAPIResponse {
+  access_token: string;
+  token_type: 'bearer';
+  username: string;
+}
 
 export interface ChatAPIResponse {
   response: string;
@@ -44,6 +47,16 @@ export interface ThreadsAPIResponse {
   threads: string[];
 }
 
+export interface ThreadHistoryMessage {
+  role: 'human' | 'ai';
+  content: string;
+}
+
+export interface ThreadHistoryAPIResponse {
+  thread_id: string;
+  messages: ThreadHistoryMessage[];
+}
+
 export interface FilesAPIResponse {
   files: UploadedFile[];
 }
@@ -53,9 +66,5 @@ export interface UploadAPIResponse {
   filename: string;
 }
 
-// ─── Streaming ───────────────────────────────────────────────────────────────
-
-/** Callback invoked for each streamed token. */
 export type StreamTokenCallback = (token: string) => void;
-/** Callback invoked when streaming is complete with the full response. */
 export type StreamCompleteCallback = (full: ChatAPIResponse) => void;

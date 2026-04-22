@@ -32,6 +32,6 @@ load_dotenv()
 # Chat Groq from LANGCHAIN
 llm = ChatGroq(
     model="llama-3.1-8b-instant",
-    temperature=0.01,
+    temperature=0.2,
 )
 
