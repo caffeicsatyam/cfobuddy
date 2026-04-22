@@ -1,96 +1,79 @@
-# CFO Buddy 💼
+# 🚀 CFO Buddy — Your AI-Powered Financial Co-Pilot
 
-An intelligent, ChatGPT-inspired financial assistant powered by **LangGraph**, **FastAPI**, and **Next.js**. CFO Buddy helps you analyze financial statements, track stock trends, and generate insights from your data with a premium, human-like interface.
-
----
-
-## ✨ Features
-
-- **ChatGPT-like UI** — Clean, dark-mode interface with centered chat, suggestion chips, and smooth animations.
-- **Multi-file Intelligence** — Support for CSV, PDF, Excel, and Word files via LlamaIndex and Neon pgvector.
-- **Hybrid Retrieval** — Semantic search combined with BM25 keyword matching for pinpoint accuracy.
-- **Live Market Data** — Real-time stock prices, income statements, and balance sheets via yfinance.
-- **Interactive Charts** — Auto-generated Plotly/HTML charts visualized directly in the chat.
-- **Persistent Memory** — Full conversation history saved to SQLite, allowing you to resume any thread.
-- **LangGraph Agent** — Robust ReAct agent architecture with specialized nodes for Finance, Web Search, and Knowledge Retrieval.
+> Not just another dashboard. Not just another chatbot.  
+> **CFO Buddy thinks, analyzes, and advises like a real financial expert.**
 
 ---
 
-## 📂 Project Structure
+## 💼 What is CFO Buddy?
 
-```text
-cfobuddy/
-├── api/                     ← FastAPI backend implementation
-│   ├── main.py              ← REST API entry point
-│   └── ...
-├── frontend/                ← Next.js 15+ ChatGPT-style interface
-│   ├── src/app/             ← App router (Dashboard, Landing)
-│   ├── src/components/      ← ChatArea, Sidebar, etc.
-│   └── ...
-├── core/                    ← Agent logic, Graph, and LLM setup
-├── tools/                   ← Finance, Chart, and Search tools
-├── data/                    ← Local knowledge base (PDFs, CSVs)
-├── build_index.py           ← Indexing script for local data
-└── requirements.txt         ← Backend dependencies
-```
+CFO Buddy is a **next-generation financial intelligence assistant** that blends the power of LLMs with real-time data, multi-agent reasoning, and a sleek ChatGPT-style interface.
+
+Upload your data. Ask questions. Get insights.  
+Simple on the surface — **deeply intelligent underneath.**
 
 ---
 
-## 🚀 Quick Start
+## ✨ Core Features
 
-### 1. Backend Setup
-
-```bash
-# Clone and enter
-git clone https://github.com/caffeicsatyam/cfobuddy.git
-cd cfobuddy
-
-# Virtual environment
-python -m venv venv
-source venv/bin/activate  # venv\Scripts\activate on Windows
-
-# Install dependencies
-pip install -r requirements.txt
-```
-
-### 2. Environment Variables
-
-Create a `.env` file in the root:
-
-```env
-# LLM
-GROQ_API_KEY=your_groq_api_key
-
-# Vector DB (Neon)
-DATABASE_URL=postgresql://user:password@host/dbname?sslmode=require
-
-# Financial APIs
-TWELVE_DATA_API_KEY=your_twelve_data_key
-```
-
-### 3. Build Index & Run
-
-```bash
-# 1. Initialize Vector DB (Run once)
-python build_index.py
-
-# 2. Start Backend API
-python main.py
-```
-
-### 4. Frontend Setup
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-Visit **[http://localhost:3000](http://localhost:3000)** to see the new CFO Buddy!
+- 💬 **Conversational Finance** — Ask anything, get expert-level insights  
+- 📁 **Multi-File Intelligence** — CSV, PDF, Excel, Word support  
+- 📈 **Auto Charts** — Plotly-powered visualizations generated on the fly  
+- 🧠 **Agentic Reasoning** — Transparent thinking + decision flow  
+- 🗄️ **Memory System** — Resume conversations anytime  
+- 🔍 **Hybrid Retrieval Engine** — Semantic + keyword search fusion  
+- 🌐 **Live Financial Data** — Powered by yfinance + APIs  
 
 ---
 
-## 🛠 Tools & Tech Stack
+## 🧠 Agent Workflow
+
+The "brain" of CFO Buddy is a multi-agent orchestration layer. A **Supervisor** node manages a team of specialized experts, deciding who to delegate tasks to and verifying results before responding.
+
+
+
+---
+```mermaid
+graph TD
+    Start(( )) -->|User Query| Supervisor[Supervisor Agent]
+    
+    subgraph Brain ["Agent Thinking Process"]
+        direction TB
+        Planning[Planning] --> Delegation[Delegation]
+        Delegation --> Execution[Execution]
+        Execution --> Reflection[Reflection]
+        Reflection -->|Need more info?| Planning
+    end
+    
+    Supervisor --> Planning
+    Reflection -->|Answer Ready| End(( ))
+```
+
+    
+## 🏗️ System Architecture
+
+CFO Buddy is built with a modern, high-performance stack designed for scalability and intelligence.
+
+
+
+---
+```mermaid
+graph TD
+    User((User)) --> NextJS[Next.js Frontend]
+    NextJS <--> FastAPI[FastAPI Backend]
+    
+    subgraph "Brain (LangGraph)"
+        FastAPI <--> Supervisor[Supervisor Agent]
+        Supervisor <--> Analytics[Analytics Agent]
+        Supervisor <--> Search[RAG Search Agent]
+    end
+    
+    FastAPI <--> Neon[(Neon DB / pgvector)]
+    Search <--> LlamaIndex[LlamaIndex Engine]
+    Analytics <--> Plotly[Plotly Charts]
+```
+
+## 🛠️ Tech Stack
 
 | Component | Technology |
 |-----------|------------|
@@ -103,17 +86,34 @@ Visit **[http://localhost:3000](http://localhost:3000)** to see the new CFO Budd
 
 ---
 
-## 📈 Roadmap
+## 🚀 Quick Start
 
-- [x] Human-like ChatGPT UI redesign
-- [x] Multi-agent Graph Architecture
-- [x] Interactive Chart Visualization
-- [ ] Per-user Vector Stores
-- [ ] Direct Bank Integration (Plaid)
-- [ ] Voice interface support
+### 1. Backend Setup
+```bash
+git clone https://github.com/caffeicsatyam/cfobuddy.git
+cd cfobuddy
+python -m venv venv
+source venv/bin/activate  # venv\Scripts\activate on Windows
+pip install -r requirements.txt
+```
 
----
+### 2. Environment Variables
+Create a `.env` in the root:
+```env
+GROQ_API_KEY=your_key
+DATABASE_URL=your_neon_url
+TWELVE_DATA_API_KEY=your_key
+```
 
-## 📄 License
+### 3. Build & Run
+```bash
+python build_index.py  # Initialize vector store
+python api/main.py     # Start API
+```
 
-MIT © [caffeicsatyam](https://github.com/caffeicsatyam)
+### 4. Frontend Setup
+```bash
+cd frontend
+npm install
+npm run dev
+```
