@@ -19,7 +19,6 @@ checkpointer = PostgresSaver(_conn)
 
 checkpointer.setup()
 
-
 def retrieve_all_threads():
     """Return all existing thread IDs from memory."""
     all_threads = set()

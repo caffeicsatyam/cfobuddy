@@ -301,14 +301,43 @@ def parse_response(messages: list[Any]) -> tuple[str, Optional[dict[str, Any]]]:
                 if isinstance(block, dict) and block.get("type") == "text":
                     text += block.get("text", "")
         elif isinstance(content, str):
-            if "CHART_DATA:" in content:
-                try:
-                    json_str = content.split("CHART_DATA:", maxsplit=1)[1].strip()
-                    chart = json.loads(json_str)
-                except Exception:
-                    logger.warning("Failed to parse chart payload from model response")
-            elif getattr(msg, "type", "") == "ai":
-                text = content
+            # Extract chart metadata from tool results (CHART_JSON) or AI messages (CHART_DATA)
+            for marker in ("CHART_JSON:", "CHART_DATA:"):
+                if marker in content:
+                    try:
+                        json_str = content.split(marker, maxsplit=1)[1].strip()
+                        # Handle case where there's content after the JSON
+                        # Try to find the end of the JSON object
+                        chart = json.loads(json_str)
+                    except json.JSONDecodeError:
+                        # The JSON might have trailing text; try to isolate it
+                        try:
+                            brace_count = 0
+                            end_idx = 0
+                            for i, ch in enumerate(json_str):
+                                if ch == '{':
+                                    brace_count += 1
+                                elif ch == '}':
+                                    brace_count -= 1
+                                    if brace_count == 0:
+                                        end_idx = i + 1
+                                        break
+                            if end_idx > 0:
+                                chart = json.loads(json_str[:end_idx])
+                        except Exception:
+                            logger.warning("Failed to parse chart payload from response")
+                    except Exception:
+                        logger.warning("Failed to parse chart payload from response")
+                    break
+
+            if getattr(msg, "type", "") == "ai":
+                # Strip CHART_JSON from the displayed text
+                clean = content
+                if "CHART_JSON:" in clean:
+                    clean = clean.split("CHART_JSON:")[0].strip()
+                if "CHART_DATA:" in clean:
+                    clean = clean.split("CHART_DATA:")[0].strip()
+                text = clean
     return text.strip(), chart
 
 
@@ -451,7 +480,9 @@ async def serve_chart(filename: str) -> FastAPIFileResponse:
     chart_path = CHARTS_FOLDER / Path(filename).name
     if not chart_path.exists() or not chart_path.is_file():
         raise HTTPException(status_code=404, detail="Chart not found")
-    return FastAPIFileResponse(chart_path, media_type="image/png")
+    # Charts are interactive Plotly HTML files
+    media = "text/html" if chart_path.suffix.lower() == ".html" else "image/png"
+    return FastAPIFileResponse(chart_path, media_type=media)
 
 
 app.include_router(router)

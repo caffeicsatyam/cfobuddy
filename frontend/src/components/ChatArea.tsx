@@ -11,11 +11,13 @@ import styles from './ChatArea.module.css';
 interface Props {
   messages: Message[];
   isTyping: boolean;
+  onSuggestionClick?: (suggestion: string) => void;
 }
 
 interface ChartPreview {
   src: string;
   title: string;
+  isHtml: boolean;
 }
 
 function extractChartPath(message: Message): string | null {
@@ -30,7 +32,8 @@ function extractChartPath(message: Message): string | null {
     }
   }
 
-  const match = message.content.match(/\/charts\/[^\s`)"']+\.png/);
+  // Match both .html and .png chart URLs from message content
+  const match = message.content.match(/\/charts\/[^\s`)"']+\.(?:html|png)/);
   return match ? match[0] : null;
 }
 
@@ -54,10 +57,18 @@ function resolveChartPreview(message: Message): ChartPreview | null {
   return {
     src: normalizedPath,
     title,
+    isHtml: chartPath.endsWith('.html'),
   };
 }
 
-export default function ChatArea({ messages, isTyping }: Props) {
+const SUGGESTION_CHIPS = [
+  { icon: '📊', label: 'Analyze P&L', prompt: 'Analyze my profit and loss statement and highlight key trends' },
+  { icon: '📈', label: 'Revenue trends', prompt: 'Show me a chart of revenue trends over the last 12 months' },
+  { icon: '💰', label: 'Cash flow health', prompt: 'What is the current state of my cash flow and runway?' },
+  { icon: '⚡', label: 'Quick ratios', prompt: 'Calculate key financial ratios from the uploaded data' },
+];
+
+export default function ChatArea({ messages, isTyping, onSuggestionClick }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [activeChart, setActiveChart] = useState<ChartPreview | null>(null);
 
@@ -77,9 +88,24 @@ export default function ChatArea({ messages, isTyping }: Props) {
     <div className={styles.chatContainer}>
       {messages.length === 0 ? (
         <div className={styles.emptyState}>
-          <div className={styles.emptyIcon}>◈</div>
-          <h2>How can CFOBuddy assist your financial strategy today?</h2>
-          <p>I&apos;m ready to analyze ledgers, forecast trends, or audit risk.</p>
+          <div className={styles.emptyLogo}>✦</div>
+          <h1 className={styles.emptyTitle}>What can I help with?</h1>
+          <p className={styles.emptySubtitle}>
+            Ask me anything about your financial data — from P&L analysis to cash flow forecasting.
+          </p>
+
+          <div className={styles.suggestions}>
+            {SUGGESTION_CHIPS.map((chip) => (
+              <button
+                key={chip.label}
+                className={styles.suggestionChip}
+                onClick={() => onSuggestionClick?.(chip.prompt)}
+              >
+                <span className={styles.chipIcon}>{chip.icon}</span>
+                <span className={styles.chipLabel}>{chip.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
       ) : (
         <div className={styles.messageList}>
@@ -89,64 +115,81 @@ export default function ChatArea({ messages, isTyping }: Props) {
             return (
               <div
                 key={msg.id}
-                className={`${styles.messageWrap} ${
-                  msg.role === 'user' ? styles.wrapUser : styles.wrapAi
+                className={`${styles.messageRow} ${
+                  msg.role === 'user' ? styles.rowUser : styles.rowAi
                 }`}
               >
-                {msg.role === 'assistant' && (
-                  <div className={styles.avatarAi}>◈</div>
-                )}
+                <div className={styles.messageInner}>
+                  {msg.role === 'assistant' && (
+                    <div className={styles.avatarAi}>
+                      <span>✦</span>
+                    </div>
+                  )}
 
-                <div
-                  className={`${styles.bubble} ${
-                    msg.role === 'user' ? styles.bubbleUser : styles.bubbleAi
-                  }`}
-                >
-                  <div className={styles.content}>
-                    {msg.content.split('\n').map((line, i) => (
-                      <span key={i}>
-                        {line}
-                        <br />
-                      </span>
-                    ))}
-                    {msg.isLoading && msg.role === 'assistant' && (
-                      <span className="streaming-cursor"></span>
+                  <div
+                    className={`${styles.messageBubble} ${
+                      msg.role === 'user' ? styles.bubbleUser : styles.bubbleAi
+                    }`}
+                  >
+                    <div className={styles.content}>
+                      {msg.content.split('\n').map((line, i) => (
+                        <span key={i}>
+                          {line}
+                          <br />
+                        </span>
+                      ))}
+                      {msg.isLoading && msg.role === 'assistant' && (
+                        <span className="streaming-cursor"></span>
+                      )}
+                    </div>
+
+                    {chartPreview && (
+                      <button
+                        type="button"
+                        className={styles.chartCard}
+                        onClick={() => setActiveChart(chartPreview)}
+                      >
+                        <div className={styles.chartCardHeader}>
+                          <div className={styles.chartIcon}>📊</div>
+                          <span className={styles.chartLabel}>{chartPreview.title}</span>
+                        </div>
+                        {chartPreview.isHtml ? (
+                          <iframe
+                            src={chartPreview.src}
+                            title={chartPreview.title}
+                            className={styles.chartIframe}
+                            style={{
+                              width: '100%',
+                              height: '300px',
+                              border: 'none',
+                              borderRadius: '8px',
+                              pointerEvents: 'none',
+                            }}
+                          />
+                        ) : (
+                          <Image
+                            src={chartPreview.src}
+                            alt={chartPreview.title}
+                            className={styles.chartImage}
+                            width={960}
+                            height={540}
+                            unoptimized
+                          />
+                        )}
+                        <span className={styles.chartHint}>Click to expand</span>
+                      </button>
                     )}
                   </div>
-
-                  {chartPreview && (
-                    <button
-                      type="button"
-                      className={styles.chartCard}
-                      onClick={() => setActiveChart(chartPreview)}
-                    >
-                      <div className={styles.chartCardHeader}>
-                        <div className={styles.chartIcon}>📊</div>
-                        <span className={styles.chartLabel}>{chartPreview.title}</span>
-                      </div>
-                      <Image
-                        src={chartPreview.src}
-                        alt={chartPreview.title}
-                        className={styles.chartImage}
-                        width={960}
-                        height={540}
-                        unoptimized
-                      />
-                      <span className={styles.chartHint}>Tap to expand</span>
-                    </button>
-                  )}
                 </div>
-
-                {msg.role === 'user' && (
-                  <div className={styles.avatarUser}>AS</div>
-                )}
               </div>
             );
           })}
 
           {isTyping && (
-            <div className={`${styles.messageWrap} ${styles.wrapAi}`}>
-              <TypingIndicator />
+            <div className={`${styles.messageRow} ${styles.rowAi}`}>
+              <div className={styles.messageInner}>
+                <TypingIndicator />
+              </div>
             </div>
           )}
 
@@ -174,14 +217,28 @@ export default function ChatArea({ messages, isTyping }: Props) {
                 ×
               </button>
             </div>
-            <Image
-              src={activeChart.src}
-              alt={activeChart.title}
-              className={styles.chartModalImage}
-              width={1400}
-              height={900}
-              unoptimized
-            />
+            {activeChart.isHtml ? (
+              <iframe
+                src={activeChart.src}
+                title={activeChart.title}
+                className={styles.chartModalIframe}
+                style={{
+                  width: '100%',
+                  height: '70vh',
+                  border: 'none',
+                  borderRadius: '8px',
+                }}
+              />
+            ) : (
+              <Image
+                src={activeChart.src}
+                alt={activeChart.title}
+                className={styles.chartModalImage}
+                width={1400}
+                height={900}
+                unoptimized
+              />
+            )}
           </div>
         </button>
       )}

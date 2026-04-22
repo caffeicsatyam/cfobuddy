@@ -21,6 +21,35 @@ def sanitize_table_name(filename: str) -> str:
     name = name.replace(" ", "_").replace("-", "_").replace(".", "_")
     return name
 
+
+def maybe_coerce_numeric(series: pd.Series) -> pd.Series:
+    """Convert currency-like/object columns to numeric when most values are parseable."""
+    if series.dtype != object:
+        return series
+
+    raw = series.astype(str).str.strip()
+    normalized = raw.replace(
+        {
+            "": None,
+            "-": "0",
+            "$-": "0",
+            "N/A": None,
+            "n/a": None,
+        }
+    )
+    normalized = normalized.str.replace(r"[\$,]", "", regex=True)
+    numeric = pd.to_numeric(normalized, errors="coerce")
+
+    non_null_count = series.notna().sum()
+    if non_null_count == 0:
+        return series
+
+    conversion_ratio = numeric.notna().sum() / non_null_count
+    if conversion_ratio < 0.8:
+        return series
+
+    return numeric
+
 @traceable(name="load_csvs_to_neon")
 def load_csvs_to_neon(force_reload: bool = False):
     csv_files = glob.glob(os.path.join(DATA_FOLDER, "*.csv"))
@@ -55,12 +84,7 @@ def load_csvs_to_neon(force_reload: bool = False):
 
             # Clean currency values before loading
             for col in df.columns:
-                if df[col].dtype == object:
-                    cleaned = df[col].str.replace(r'[\$,]', '', regex=True)
-                    try:
-                        df[col] = pd.to_numeric(cleaned)
-                    except Exception:
-                        pass
+                df[col] = maybe_coerce_numeric(df[col])
 
             df.to_sql(
                 table_name,

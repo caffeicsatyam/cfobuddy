@@ -12,61 +12,75 @@ export default function Home() {
         <section className={styles.hero}>
           <div className={styles.heroContent}>
             <div className={styles.badgeWrap}>
-              <span className={styles.badge}>v1.0 is Live</span>
+              <span className={styles.badge}>
+                <span className={styles.badgeDot} />
+                Now available
+              </span>
             </div>
             <h1 className={styles.headline}>
-              Your Precision AI <span className="gradient-text">Financial Analyst.</span>
+              Your AI-powered<br />
+              <span className="gradient-text">Financial Analyst.</span>
             </h1>
             <p className={styles.subhead}>
-              A cutting-edge vector database for real-time insights and automated reporting. 
-              Transform raw data into executive strategy instantly.
+              Upload your financial data and get instant analysis, automated charts, 
+              and actionable insights — powered by advanced AI that understands the numbers.
             </p>
             <div className={styles.heroActions}>
-              <Link href="/dashboard" className="btn btn-primary">
-                Explore Dashboard
+              <Link href="/dashboard" className={styles.heroPrimaryBtn}>
+                Start analyzing →
               </Link>
-              <Link href="#features" className="btn btn-ghost">
-                View Features
+              <Link href="#features" className={styles.heroSecondaryBtn}>
+                See how it works
               </Link>
             </div>
           </div>
 
-          {/* Stat Cards Layered Pattern */}
-          <div className={styles.heroStats}>
-            <div className={`${styles.statCard} ${styles.stat1} glass`}>
-              <span className="label-upper">Net Liquidity</span>
-              <div className={styles.statValue}>$1.42M</div>
-              <div className={styles.statTrend}>+12.4% MoM</div>
-            </div>
-            <div className={`${styles.statCard} ${styles.stat2} glass`}>
-              <span className="label-upper">AI Forecast Accuracy</span>
-              <div className={styles.statValue}>99.8%</div>
-              <div className={styles.statTrend}>Q3 Validated</div>
-            </div>
-            <div className={`${styles.statCard} ${styles.stat3} glass`}>
-              <span className="label-upper">Risk Index</span>
-              <div className={styles.statValue} style={{ color: 'var(--secondary)' }}>Low</div>
-              <div className={styles.statTrend}>Audited today</div>
+          {/* Floating preview card */}
+          <div className={styles.heroPreview}>
+            <div className={styles.previewCard}>
+              <div className={styles.previewHeader}>
+                <div className={styles.previewDots}>
+                  <span /><span /><span />
+                </div>
+                <span className={styles.previewTitle}>CFOBuddy Chat</span>
+              </div>
+              <div className={styles.previewBody}>
+                <div className={styles.previewMsg}>
+                  <div className={styles.previewAvatar}>✦</div>
+                  <div className={styles.previewText}>
+                    Your net revenue grew <strong>23.4%</strong> QoQ. Operating margin 
+                    improved to <strong>18.2%</strong>, suggesting strong cost management. 
+                    I&apos;ve generated a chart showing the trend.
+                  </div>
+                </div>
+                <div className={styles.previewChart}>
+                  <div className={styles.chartBar} style={{ height: '40%' }} />
+                  <div className={styles.chartBar} style={{ height: '55%' }} />
+                  <div className={styles.chartBar} style={{ height: '50%' }} />
+                  <div className={styles.chartBar} style={{ height: '72%' }} />
+                  <div className={styles.chartBar} style={{ height: '65%' }} />
+                  <div className={styles.chartBar} style={{ height: '88%' }} />
+                </div>
+              </div>
             </div>
           </div>
         </section>
 
-        {/* Features / Value Prop */}
+        {/* Features */}
         <section id="features" className={styles.section}>
           <div className={styles.sectionHead}>
-            <h2 className={styles.sectionTitle}>Architected for Professional Growth.</h2>
+            <h2 className={styles.sectionTitle}>Everything you need for financial clarity.</h2>
             <p className={styles.sectionDesc}>
-              Leave manual spreadsheets behind. Our AI infrastructure bridges the gap 
-              between historical data and future predictions.
+              CFOBuddy combines AI reasoning with your data to deliver the insights your business needs.
             </p>
           </div>
 
           <div className={styles.grid}>
             {[
-              { title: 'AI-driven analysis', icon: '◈', desc: 'Our proprietary Large Language Model interprets complex P&L statements with contextual nuance, identifying hidden inefficiencies in seconds.' },
-              { title: 'Automated chart generation', icon: '📊', desc: 'Instant visual storytelling. Convert raw CSV data into boardroom-ready pitch decks and reporting modules.' },
-              { title: 'Multi-file support', icon: '📁', desc: 'PDF, XLSX, CSV, or direct SQL integrations. CFOBuddy handles cross-platform data mapping effortlessly.' },
-              { title: 'Real-time Insights', icon: '⚡', desc: 'Connect your bank feeds for a live pulse on your runway, burn rate, and capital efficiency.' }
+              { title: 'Conversational analysis', icon: '💬', desc: 'Ask questions in plain English. CFOBuddy understands context, interprets financial data, and provides detailed explanations.' },
+              { title: 'Automated charts', icon: '📊', desc: 'Generate beautiful, interactive visualizations from your data — revenue trends, cash flow waterfalls, and more.' },
+              { title: 'Multi-format support', icon: '📁', desc: 'Upload PDF, XLSX, CSV, or DOCX files. CFOBuddy indexes and understands your documents automatically.' },
+              { title: 'Real-time market data', icon: '⚡', desc: 'Get live stock prices, market trends, and financial metrics integrated directly into your analysis.' }
             ].map((feat, i) => (
               <div key={i} className={styles.featureCard}>
                 <div className={styles.featureIcon}>{feat.icon}</div>
@@ -78,43 +92,51 @@ export default function Home() {
         </section>
 
         {/* Pricing */}
-        <section className={`${styles.section} surface-low`}>
+        <section id="pricing" className={styles.section}>
           <div className={styles.sectionHead}>
-            <h2 className={styles.sectionTitle}>Simple and transparent pricing.</h2>
-            <p className={styles.sectionDesc}>No hidden tiers. Just elite financial intelligence for every scale.</p>
+            <h2 className={styles.sectionTitle}>Simple, transparent pricing.</h2>
+            <p className={styles.sectionDesc}>No hidden tiers. Just powerful financial intelligence for every scale.</p>
           </div>
 
           <div className={styles.pricingGrid}>
             
             <div className={styles.priceCard}>
-              <h3 className={styles.priceName}>Professional</h3>
+              <h3 className={styles.priceName}>Starter</h3>
+              <p className={styles.priceAmount}>Free</p>
               <ul className={styles.priceFeatures}>
-                <li>✔ 5 AI Analysis/mo</li>
-                <li>✔ Basic Chart Generation</li>
-                <li className={styles.disabledFeature}>✖ Multi-file Support</li>
+                <li>✓ 5 AI analyses per month</li>
+                <li>✓ Basic chart generation</li>
+                <li>✓ Single file upload</li>
+                <li className={styles.disabledFeature}>✗ Multi-file support</li>
               </ul>
             </div>
 
-            <div className={`${styles.priceCard} ${styles.priceCardActive} gradient-bg-subtle`}>
+            <div className={`${styles.priceCard} ${styles.priceCardActive}`}>
               <div className={styles.popularBadge}>Most Popular</div>
-              <h3 className={styles.priceName} style={{ color: 'var(--primary)' }}>Enterprise AI</h3>
+              <h3 className={styles.priceName}>Pro</h3>
+              <p className={styles.priceAmount}>$29<span>/mo</span></p>
               <ul className={styles.priceFeatures}>
-                <li>✔ Unlimited AI Reasoning</li>
-                <li>✔ Vector DB File Sync</li>
-                <li>✔ Custom Strategy Export</li>
-                <li>✔ 24/7 Financial Support</li>
+                <li>✓ Unlimited AI analysis</li>
+                <li>✓ Advanced chart generation</li>
+                <li>✓ Multi-file knowledge base</li>
+                <li>✓ Real-time market data</li>
+                <li>✓ Priority support</li>
               </ul>
-              <button className="btn btn-primary" style={{ width: '100%', marginTop: '1.5rem' }}>
-                Start Free Trial
-              </button>
+              <Link href="/dashboard" className={styles.priceBtn}>
+                Get started
+              </Link>
             </div>
 
             <div className={styles.priceCard}>
-              <h3 className={styles.priceName}>Custom</h3>
-              <p className={styles.featureDesc} style={{ margin: '1rem 0' }}>
-                Tailored infrastructure for hedge funds, VCs, and multi-national corporations with high-throughput needs.
-              </p>
-              <button className="btn btn-ghost" style={{ width: '100%' }}>Contact Sales</button>
+              <h3 className={styles.priceName}>Enterprise</h3>
+              <p className={styles.priceAmount}>Custom</p>
+              <ul className={styles.priceFeatures}>
+                <li>✓ Everything in Pro</li>
+                <li>✓ Custom integrations</li>
+                <li>✓ Dedicated support</li>
+                <li>✓ SLA guarantees</li>
+              </ul>
+              <button className={styles.priceBtnOutline}>Contact sales</button>
             </div>
 
           </div>
@@ -122,11 +144,11 @@ export default function Home() {
 
         {/* CTA */}
         <section className={styles.ctaSection}>
-          <div className={`${styles.ctaInner} glass`}>
-            <h2>Ready to upgrade your financial stack?</h2>
-            <p>Join over 500+ high-growth companies using CFOBuddy to automate their entire financial operations.</p>
-            <Link href="/dashboard" className="btn btn-primary">
-              Launch Dashboard →
+          <div className={styles.ctaInner}>
+            <h2>Ready to understand your finances better?</h2>
+            <p>Join hundreds of teams using CFOBuddy to make smarter financial decisions.</p>
+            <Link href="/dashboard" className={styles.heroPrimaryBtn}>
+              Start free →
             </Link>
           </div>
         </section>
@@ -135,14 +157,13 @@ export default function Home() {
       <footer className={styles.footer}>
         <div className={styles.footerInner}>
           <div className={styles.footerBrand}>
-            <span className={styles.logoIcon} style={{ marginRight: 8 }}>◈</span>
-            <span style={{ fontWeight: 800 }}>CFOBuddy AI.</span>
-            <span> Algorithmic Precision.</span>
+            <span style={{ color: '#10a37f', marginRight: 6 }}>✦</span>
+            <span style={{ fontWeight: 700 }}>CFOBuddy</span>
           </div>
           <p className={styles.copyright}>© 2024 CFOBuddy. All rights reserved.</p>
           <div className={styles.footerLinks}>
-            <a href="#">Privacy Policy</a>
-            <a href="#">Terms of Service</a>
+            <a href="#">Privacy</a>
+            <a href="#">Terms</a>
             <a href="#">Security</a>
             <a href="#">Contact</a>
           </div>

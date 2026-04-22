@@ -9,23 +9,23 @@
 }
 
 .dropzone {
-  border: 2px dashed var(--outline-variant);
-  border-radius: var(--radius-lg);
-  padding: 2rem 1.5rem;
+  border: 1px dashed #444;
+  border-radius: 0.75rem;
+  padding: 1.5rem 1rem;
   text-align: center;
   cursor: pointer;
-  background: var(--surface-container-lowest);
-  transition: all var(--transition);
+  background: transparent;
+  transition: all 0.15s;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 140px;
+  min-height: 120px;
 }
 
 .dropzone:hover, .dragging {
-  border-color: var(--secondary);
-  background: rgba(107, 216, 203, 0.04);
+  border-color: #10a37f;
+  background: rgba(16, 163, 127, 0.04);
 }
 
 .hiddenInput {
@@ -33,12 +33,12 @@
 }
 
 .icon {
-  font-size: 1.5rem;
-  color: var(--secondary);
+  font-size: 1.25rem;
+  color: #10a37f;
   margin-bottom: 0.5rem;
-  background: rgba(107, 216, 203, 0.1);
-  width: 40px;
-  height: 40px;
+  background: rgba(16, 163, 127, 0.1);
+  width: 36px;
+  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -48,29 +48,29 @@
 }
 
 .title {
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
   font-weight: 500;
-  color: var(--on-surface);
+  color: #ececec;
   margin-bottom: 0.25rem;
 }
 
 .subtitle {
-  font-size: 0.75rem;
-  color: var(--outline);
+  font-size: 0.6875rem;
+  color: #6e6e6e;
 }
 
 .uploadingState {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1rem;
-  color: var(--secondary);
+  gap: 0.75rem;
+  color: #b4b4b4;
   font-weight: 500;
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
 }
 
 .successMsg {
-  color: var(--secondary);
+  color: #10a37f;
   font-size: 0.8125rem;
   text-align: center;
   animation: fadeIn 0.3s ease;

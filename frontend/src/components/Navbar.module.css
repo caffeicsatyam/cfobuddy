@@ -4,17 +4,17 @@
   left: 0;
   right: 0;
   z-index: 100;
-  background: rgba(11, 19, 38, 0.85);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-bottom: 1px solid rgba(68, 71, 77, 0.15);
+  background: rgba(23, 23, 23, 0.9);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid #2f2f2f;
 }
 
 .inner {
-  max-width: 1280px;
+  max-width: 1200px;
   margin: 0 auto;
   padding: 0 2rem;
-  height: 64px;
+  height: 60px;
   display: flex;
   align-items: center;
   gap: 2rem;
@@ -26,25 +26,22 @@
   gap: 0.5rem;
   font-family: var(--font-headline);
   font-size: 1.125rem;
-  font-weight: 800;
-  color: var(--on-surface);
+  font-weight: 700;
+  color: #ececec;
   letter-spacing: -0.02em;
   text-decoration: none;
   flex-shrink: 0;
 }
 
 .logoIcon {
-  font-size: 1.25rem;
-  background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  font-size: 1.125rem;
+  color: #10a37f;
 }
 
 .links {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.125rem;
   list-style: none;
   margin-left: auto;
 }
@@ -54,13 +51,13 @@
   border-radius: 0.5rem;
   font-size: 0.9375rem;
   font-weight: 500;
-  color: var(--on-surface-variant);
+  color: #8e8e8e;
   text-decoration: none;
-  transition: color 0.2s, background 0.2s;
+  transition: color 0.15s, background 0.15s;
 }
 .link:hover {
-  color: var(--on-surface);
-  background: rgba(182, 196, 255, 0.06);
+  color: #ececec;
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .actions {
@@ -83,7 +80,7 @@
   display: block;
   width: 20px;
   height: 2px;
-  background: var(--on-surface);
+  background: #ececec;
   border-radius: 2px;
 }
 
@@ -92,11 +89,11 @@
   flex-direction: column;
   gap: 0.5rem;
   padding: 1rem 2rem 1.5rem;
-  border-top: 1px solid rgba(68, 71, 77, 0.15);
+  border-top: 1px solid #2f2f2f;
 }
 .mobileLink {
   padding: 0.625rem 0;
-  color: var(--on-surface-variant);
+  color: #b4b4b4;
   font-size: 1rem;
   text-decoration: none;
 }
