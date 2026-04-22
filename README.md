@@ -50,27 +50,33 @@ graph TD
 ```
 
     
-## 🏗️ System Architecture
+## 🕸️ Graph Structure
 
-CFO Buddy is built with a modern, high-performance stack designed for scalability and intelligence.
-
-
+The "brain" of CFO Buddy is a multi-agent state machine built with **LangGraph**. It uses a specialized router to delegate queries to expert agents, each equipped with its own suite of professional tools.
 
 ---
 ```mermaid
 graph TD
-    User((User)) --> NextJS[Next.js Frontend]
-    NextJS <--> FastAPI[FastAPI Backend]
+    START((START)) --> Upload[upload_node]
     
-    subgraph "Brain (LangGraph)"
-        FastAPI <--> Supervisor[Supervisor Agent]
-        Supervisor <--> Analytics[Analytics Agent]
-        Supervisor <--> Search[RAG Search Agent]
+    Upload --> Router{LLM Router}
+    
+    Router -->|General| Model[model_node]
+    Router -->|SQL Query| SQL[sql_node]
+    Router -->|Finance Data| Finance[finance_node]
+    Router -->|Web Search| Web[web_search_node]
+    
+    subgraph Tools ["Expert Toolkits"]
+        Model <--> ITools[internal_tools]
+        SQL <--> STools[sql_tools]
+        Finance <--> FTools[finance_tools]
+        Web <--> WTools[web_search_tools]
     end
     
-    FastAPI <--> Neon[(Neon DB / pgvector)]
-    Search <--> LlamaIndex[LlamaIndex Engine]
-    Analytics <--> Plotly[Plotly Charts]
+    Model -.-> END((END))
+    SQL -.-> END
+    Finance -.-> END
+    Web -.-> END
 ```
 
 ## 🛠️ Tech Stack
