@@ -26,30 +26,8 @@ Simple on the surface — **deeply intelligent underneath.**
 
 ---
 
-## 🧠 Agent Workflow
 
-The "brain" of CFO Buddy is a multi-agent orchestration layer. A **Supervisor** node manages a team of specialized experts, deciding who to delegate tasks to and verifying results before responding.
-
-
-
----
-```mermaid
-graph TD
-    Start(( )) -->|User Query| Supervisor[Supervisor Agent]
-    
-    subgraph Brain ["Agent Thinking Process"]
-        direction TB
-        Planning[Planning] --> Delegation[Delegation]
-        Delegation --> Execution[Execution]
-        Execution --> Reflection[Reflection]
-        Reflection -->|Need more info?| Planning
-    end
-    
-    Supervisor --> Planning
-    Reflection -->|Answer Ready| End(( ))
-```
-
-    
+ 
 ## 🕸️ Graph Structure
 
 The "brain" of CFO Buddy is a multi-agent state machine built with **LangGraph**. It uses a specialized router to delegate queries to expert agents, each equipped with its own suite of professional tools.
@@ -77,6 +55,55 @@ graph TD
     SQL -.-> END
     Finance -.-> END
     Web -.-> END
+```
+
+## 🧠 Agent Workflow
+
+The "brain" of CFO Buddy is a multi-agent orchestration layer. A **Supervisor** node manages a team of specialized experts, deciding who to delegate tasks to and verifying results before responding.
+
+
+
+---
+```mermaid
+graph TD
+    Start(( )) -->|User Query| Supervisor[Supervisor Agent]
+    
+    subgraph Brain ["Agent Thinking Process"]
+        direction TB
+        Planning[Planning] --> Delegation[Delegation]
+        Delegation --> Execution[Execution]
+        Execution --> Reflection[Reflection]
+        Reflection -->|Need more info?| Planning
+    end
+    
+    Supervisor --> Planning
+    Reflection -->|Answer Ready| End(( ))
+```
+
+## 🏗️ System Architecture
+
+CFO Buddy is built with a modern, high-performance stack designed for scalability and intelligence. It separates the presentation layer, the orchestration "brain," and the data/external tool layers.
+
+---
+```mermaid
+graph LR
+    User((User)) --> UI[Next.js Frontend]
+    UI <--> API[FastAPI Backend]
+    
+    subgraph "Core Intelligence"
+        API <--> LG[LangGraph 'Brain']
+        LG <--> RAG[LlamaIndex RAG]
+    end
+    
+    subgraph "Data & Persistence"
+        LG <--> Neon[(Neon PostgreSQL)]
+        RAG <--> Vector[(pgvector)]
+    end
+    
+    subgraph "External Integration"
+        LG <--> Fin[yfinance / 12Data]
+        LG <--> Search[DuckDuckGo]
+    end
 ```
 
 ## 🛠️ Tech Stack
