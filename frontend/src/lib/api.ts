@@ -149,7 +149,7 @@ export async function sendMessageStream(
   onComplete: StreamCompleteCallback
 ): Promise<void> {
   const baseUrl = getApiBaseUrl();
-  const res = await fetch(`${baseUrl}/chat`, {
+  const res = await fetch(`${baseUrl}/chat/stream`, {
     method: 'POST',
     headers: headers(),
     body: JSON.stringify({ message, thread_id: threadId }),
@@ -159,32 +159,66 @@ export async function sendMessageStream(
     await parseError(res, 'Chat request failed');
   }
 
-  if (res.body) {
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let accumulated = '';
+  if (!res.body) {
+    throw new Error('Streaming response is unavailable');
+  }
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      const chunk = decoder.decode(value, { stream: true });
-      accumulated += chunk;
-      onToken(chunk);
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let accumulated = '';
+  let completed = false;
+
+  const handleEvent = (block: string) => {
+    const lines = block.split('\n');
+    const eventLine = lines.find((line) => line.startsWith('event:'));
+    const dataLines = lines.filter((line) => line.startsWith('data:'));
+    const event = eventLine?.slice('event:'.length).trim() ?? 'message';
+    const data = dataLines.map((line) => line.slice('data:'.length).trim()).join('\n');
+
+    if (!data) return;
+
+    if (event === 'token') {
+      const parsed = JSON.parse(data) as { token?: string };
+      if (parsed.token) {
+        accumulated += parsed.token;
+        onToken(parsed.token);
+      }
+      return;
     }
 
-    try {
-      const parsed = JSON.parse(accumulated) as ChatAPIResponse;
-      onComplete(parsed);
+    if (event === 'done') {
+      completed = true;
+      onComplete(JSON.parse(data) as ChatAPIResponse);
       return;
-    } catch {
-      onComplete({ response: accumulated, thread_id: threadId, chart: null });
-      return;
+    }
+
+    if (event === 'error') {
+      const parsed = JSON.parse(data) as { detail?: string };
+      throw new Error(parsed.detail ?? 'Streaming chat request failed');
+    }
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const blocks = buffer.split('\n\n');
+    buffer = blocks.pop() ?? '';
+
+    for (const block of blocks) {
+      handleEvent(block.trimEnd());
     }
   }
 
-  const data = (await res.json()) as ChatAPIResponse;
-  onToken(data.response);
-  onComplete(data);
+  if (buffer.trim()) {
+    handleEvent(buffer.trimEnd());
+  }
+
+  if (!completed) {
+    onComplete({ response: accumulated, thread_id: threadId, chart: null });
+  }
 }
 
 export async function getThreads(): Promise<ThreadsAPIResponse> {
@@ -196,6 +230,17 @@ export async function getThreads(): Promise<ThreadsAPIResponse> {
     await parseError(res, 'Unable to load threads');
   }
   return res.json() as Promise<ThreadsAPIResponse>;
+}
+
+export async function deleteThread(threadId: string): Promise<void> {
+  const baseUrl = getApiBaseUrl();
+  const res = await fetch(`${baseUrl}/threads/${threadId}`, {
+    method: 'DELETE',
+    headers: headers(),
+  });
+  if (!res.ok) {
+    await parseError(res, 'Failed to delete thread');
+  }
 }
 
 export async function getThreadHistory(threadId: string): Promise<ThreadHistoryAPIResponse> {

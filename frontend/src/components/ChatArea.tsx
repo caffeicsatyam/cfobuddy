@@ -71,6 +71,7 @@ const SUGGESTION_CHIPS = [
 export default function ChatArea({ messages, isTyping, onSuggestionClick }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [activeChart, setActiveChart] = useState<ChartPreview | null>(null);
+  const hasStreamingMessage = messages.some((message) => message.isLoading);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -185,7 +186,7 @@ export default function ChatArea({ messages, isTyping, onSuggestionClick }: Prop
             );
           })}
 
-          {isTyping && (
+          {isTyping && !hasStreamingMessage && (
             <div className={`${styles.messageRow} ${styles.rowAi}`}>
               <div className={styles.messageInner}>
                 <TypingIndicator />

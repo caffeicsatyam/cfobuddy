@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
-import { getThreads } from '../lib/api';
+import { useCallback, useEffect, useState } from 'react';
+import { deleteThread, getThreads } from '../lib/api';
 import { createId } from '../lib/id';
+import type { ThreadInfo } from '../lib/types';
 import { ThreadSkeleton } from './LoadingStates';
 import styles from './Sidebar.module.css';
 
@@ -15,6 +16,7 @@ interface Props {
   isOpen?: boolean;
   onToggle?: () => void;
   onLogout?: () => void;
+  onThreadsLoaded?: (ids: string[]) => void;
 }
 
 export default function Sidebar({
@@ -25,8 +27,9 @@ export default function Sidebar({
   isOpen = true,
   onToggle,
   onLogout,
+  onThreadsLoaded,
 }: Props) {
-  const [threads, setThreads] = useState<string[]>([]);
+  const [threads, setThreads] = useState<ThreadInfo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -34,16 +37,33 @@ export default function Sidebar({
       try {
         const res = await getThreads();
         setThreads(res.threads);
+        onThreadsLoaded?.(res.threads.map((t) => t.id));
       } catch (err) {
         console.error('Failed to load threads', err);
-        // Fallback or error state
-        setThreads(['main']);
+        setThreads([{ id: 'main', name: 'Main Analysis' }]);
       } finally {
         setIsLoading(false);
       }
     }
     loadThreads();
   }, []);
+
+  const handleDelete = useCallback(
+    async (threadId: string, e: React.MouseEvent) => {
+      e.stopPropagation();
+      try {
+        await deleteThread(threadId);
+        setThreads((prev) => prev.filter((t) => t.id !== threadId));
+        // If the deleted thread was selected, switch to a new chat
+        if (threadId === currentThreadId) {
+          onSelectThread(createId());
+        }
+      } catch (err) {
+        console.error('Failed to delete thread', err);
+      }
+    },
+    [currentThreadId, onSelectThread],
+  );
 
   return (
     <aside className={`${styles.sidebar} ${isOpen ? styles.sidebarOpen : styles.sidebarClosed}`}>
@@ -71,17 +91,33 @@ export default function Sidebar({
         {isLoading ? (
           <ThreadSkeleton />
         ) : (
-          threads.map((id) => (
+          threads.map((thread) => (
             <button
-              key={id}
-              onClick={() => onSelectThread(id)}
-              className={`${styles.threadItem} ${id === currentThreadId ? styles.threadActive : ''}`}
+              key={thread.id}
+              onClick={() => onSelectThread(thread.id)}
+              className={`${styles.threadItem} ${thread.id === currentThreadId ? styles.threadActive : ''}`}
             >
               <svg className={styles.threadIcon} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
               </svg>
               <span className={styles.threadName}>
-                {id === 'main' ? 'Main Analysis' : `Thread ${id.slice(0, 8)}`}
+                {thread.name}
+              </span>
+              <span
+                className={styles.deleteBtn}
+                role="button"
+                tabIndex={0}
+                title="Delete thread"
+                onClick={(e) => void handleDelete(thread.id, e)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void handleDelete(thread.id, e as unknown as React.MouseEvent);
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 6h18" />
+                  <path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+                  <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
+                </svg>
               </span>
             </button>
           ))

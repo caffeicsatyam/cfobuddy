@@ -11,7 +11,13 @@ logger = configure_logging()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 DATA_FOLDER = "data"
-engine = create_engine(DATABASE_URL)
+engine = create_engine(
+    DATABASE_URL,
+    pool_size=3,
+    max_overflow=5,
+    pool_pre_ping=True,
+    pool_recycle=300,
+)
 
 
 def sanitize_table_name(filename: str) -> str:
@@ -108,10 +114,18 @@ def load_csvs_to_neon(force_reload: bool = False):
     return loaded_tables
 
 
+_tables_loaded = False
+
+
 def ensure_csv_tables_loaded() -> list[str]:
     """Ensure CSV files in data/ are available as Neon tables for SQL tools."""
+    global _tables_loaded
+    if _tables_loaded:
+        return []
     try:
-        return load_csvs_to_neon(force_reload=False)
+        result = load_csvs_to_neon(force_reload=False)
+        _tables_loaded = True
+        return result
     except Exception as exc:
         logger.error("Failed to ensure CSV tables are loaded: %s", exc)
         return []

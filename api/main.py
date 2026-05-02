@@ -24,6 +24,7 @@ from fastapi import (
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse as FastAPIFileResponse
+from fastapi.responses import StreamingResponse
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel
@@ -156,8 +157,12 @@ class ChatResponse(BaseModel):
     thread_id: str
     chart: Optional[dict] = None
 
+class ThreadInfo(BaseModel):
+    id: str
+    name: str
+
 class ThreadResponse(BaseModel):
-    threads: list[str]
+    threads: list[ThreadInfo]
 
 class FileInfo(BaseModel):
     name: str
@@ -195,7 +200,8 @@ def build_index_with_status() -> None:
 
 @app.on_event("startup")
 async def ensure_initial_csv_load() -> None:
-    await asyncio.to_thread(load_csvs_to_neon)
+    # Don't block startup — load CSVs in background so the server can accept requests immediately
+    asyncio.create_task(asyncio.to_thread(load_csvs_to_neon))
 
 # Routes
 @app.get("/", tags=["Health"])
@@ -258,16 +264,44 @@ def parse_response(messages: list[Any]) -> tuple[str, Optional[dict[str, Any]]]:
                 text = clean
     return text.strip(), chart
 
+def text_from_stream_content(content: Any) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        text_parts = []
+        for block in content:
+            if isinstance(block, str):
+                text_parts.append(block)
+            elif isinstance(block, dict):
+                text = block.get("text") or block.get("content") or ""
+                if isinstance(text, str):
+                    text_parts.append(text)
+        return "".join(text_parts)
+    return ""
+
+def sse_event(event: str, payload: dict[str, Any]) -> str:
+    return f"event: {event}\ndata: {json.dumps(payload, separators=(',', ':'))}\n\n"
+
 router = APIRouter(dependencies=[Depends(require_auth)])
 
 @router.get("/threads", response_model=ThreadResponse)
 async def get_threads() -> ThreadResponse:
-    from core.memory import retrieve_all_threads
+    from core.memory import retrieve_threads_with_preview
     try:
-        threads = retrieve_all_threads()
-        return ThreadResponse(threads=threads if threads else ["main"])
+        threads = retrieve_threads_with_preview()
+        if not threads:
+            threads = [{"id": "main", "name": "Main Analysis"}]
+        return ThreadResponse(threads=[ThreadInfo(**t) for t in threads])
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
+
+@router.delete("/threads/{thread_id}")
+async def remove_thread(thread_id: str) -> dict[str, str]:
+    from core.memory import delete_thread
+    success = delete_thread(thread_id)
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to delete thread")
+    return {"status": "deleted", "thread_id": thread_id}
 
 @router.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest) -> ChatResponse:
@@ -284,6 +318,67 @@ async def chat(request: ChatRequest) -> ChatResponse:
     except Exception as exc:
         logger.exception("Chat request failed")
         raise HTTPException(status_code=500, detail=str(exc))
+
+@router.post("/chat/stream")
+async def chat_stream(request: ChatRequest) -> StreamingResponse:
+    from core.graph import CFOBuddy
+
+    config = {"configurable": {"thread_id": request.thread_id}}
+
+    async def event_stream():
+        queue: asyncio.Queue[Any] = asyncio.Queue()
+        stop = object()
+        loop = asyncio.get_running_loop()
+
+        def stream_in_thread() -> None:
+            try:
+                for message_chunk, _metadata in CFOBuddy.stream(
+                    {"messages": [HumanMessage(content=request.message)]},
+                    config=config,
+                    stream_mode="messages",
+                ):
+                    token = text_from_stream_content(getattr(message_chunk, "content", ""))
+                    if token:
+                        loop.call_soon_threadsafe(
+                            queue.put_nowait,
+                            sse_event("token", {"token": token}),
+                        )
+
+                state = CFOBuddy.get_state(config)
+                text, chart = parse_response(state.values.get("messages", []))
+                loop.call_soon_threadsafe(
+                    queue.put_nowait,
+                    sse_event(
+                        "done",
+                        {"response": text, "thread_id": request.thread_id, "chart": chart},
+                    ),
+                )
+            except Exception as exc:
+                logger.exception("Streaming chat request failed")
+                loop.call_soon_threadsafe(
+                    queue.put_nowait,
+                    sse_event("error", {"detail": str(exc)}),
+                )
+            finally:
+                loop.call_soon_threadsafe(queue.put_nowait, stop)
+
+        worker = asyncio.create_task(asyncio.to_thread(stream_in_thread))
+        while True:
+            item = await queue.get()
+            if item is stop:
+                break
+            yield item
+        await worker
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 @router.get("/files", response_model=FileResponse)
 async def list_files() -> FileResponse:

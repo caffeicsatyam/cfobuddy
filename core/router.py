@@ -120,14 +120,14 @@ SQL_KEYWORDS = frozenset([
 ])
 
 FINANCE_KEYWORDS = frozenset([
-    "stock", "price", "market", "ticker", "earnings", "revenue", "profit",
+    "stock", "stocks", "price", "market", "ticker", "earnings", "revenue", "profit",
     "analyst", "rating", "quote", "dividend", "ratio", "balance", "cash flow",
     "aapl", "tsla", "msft", "googl", "amzn", "meta", "nvda", "financial"
 ])
 
 WEB_KEYWORDS = frozenset([
     "news", "latest", "current", "today", "search", "recent", "happening",
-    "update", "article", "web", "internet", "google", "online"
+    "update", "article", "web", "internet", "online"
 ])
 
 MODEL_KEYWORDS = frozenset([
@@ -138,6 +138,7 @@ MODEL_KEYWORDS = frozenset([
 
 FINANCE_PRIORITY_PATTERNS = (
     r"\bstock\b",
+    r"\bstocks\b",
     r"\bticker\b",
     r"\bshare price\b",
     r"\bshares\b",
@@ -146,6 +147,7 @@ FINANCE_PRIORITY_PATTERNS = (
     r"\bgoogl\b",
     r"\bgoog\b",
     r"\bgoogle stock\b",
+    r"\bgoogle stocks\b",
     r"\balphabet stock\b",
     r"\baapl\b",
     r"\bmsft\b",

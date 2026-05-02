@@ -11,7 +11,7 @@ import {
   getThreadHistory,
   hasAuthToken,
   login,
-  sendMessage,
+  sendMessageStream,
 } from '@/lib/api';
 import { createId } from '@/lib/id';
 import type { AuthUser, Message } from '@/lib/types';
@@ -28,9 +28,17 @@ export default function Dashboard() {
   const [password, setPassword] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  // Track which thread IDs are known to exist on the backend
+  const [knownThreadIds, setKnownThreadIds] = useState<Set<string>>(new Set());
 
-  const loadThread = useCallback(async (threadId: string) => {
+  const loadThread = useCallback(async (threadId: string, forceLoad = false) => {
     if (!user) {
+      setMessages([]);
+      return;
+    }
+
+    // Skip fetching history for brand-new threads not yet persisted on the backend
+    if (!forceLoad && !knownThreadIds.has(threadId)) {
       setMessages([]);
       return;
     }
@@ -58,7 +66,7 @@ export default function Dashboard() {
         },
       ]);
     }
-  }, [user]);
+  }, [user, knownThreadIds]);
 
   useEffect(() => {
     if (user) {
@@ -130,32 +138,63 @@ export default function Dashboard() {
       timestamp: new Date(),
     };
 
-    setMessages((prev) => [...prev, userMsg]);
+    const assistantId = createId();
+    const assistantMsg: Message = {
+      id: assistantId,
+      role: 'assistant',
+      content: '',
+      timestamp: new Date(),
+      isLoading: true,
+    };
+
+    setMessages((prev) => [...prev, userMsg, assistantMsg]);
     setIsTyping(true);
 
     try {
-      const res = await sendMessage(userText, currentThreadId);
-
-      const aiMsg: Message = {
-        id: createId(),
-        role: 'assistant',
-        content: res.response,
-        chart: res.chart,
-        timestamp: new Date(),
-      };
-
-      setMessages((prev) => [...prev, aiMsg]);
-      setCurrentThreadId(res.thread_id);
+      await sendMessageStream(
+        userText,
+        currentThreadId,
+        (token) => {
+          setMessages((prev) =>
+            prev.map((message) =>
+              message.id === assistantId
+                ? { ...message, content: `${message.content}${token}` }
+                : message,
+            ),
+          );
+        },
+        (res) => {
+          setMessages((prev) =>
+            prev.map((message) =>
+              message.id === assistantId
+                ? {
+                    ...message,
+                    content: res.response || message.content,
+                    chart: res.chart,
+                    isLoading: false,
+                  }
+                : message,
+            ),
+          );
+          // Mark thread as known on the backend so history can be fetched next time
+          setKnownThreadIds((prev) => new Set([...prev, res.thread_id]));
+          setCurrentThreadId(res.thread_id);
+        },
+      );
     } catch (error) {
-      const errMsg: Message = {
-        id: createId(),
-        role: 'assistant',
-        content: `Error: ${
-          error instanceof Error ? error.message : 'Failed to connect to AI'
-        }`,
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, errMsg]);
+      setMessages((prev) =>
+        prev.map((message) =>
+          message.id === assistantId
+            ? {
+                ...message,
+                content: `Error: ${
+                  error instanceof Error ? error.message : 'Failed to connect to AI'
+                }`,
+                isLoading: false,
+              }
+            : message,
+        ),
+      );
     } finally {
       setIsTyping(false);
     }
@@ -170,28 +209,60 @@ export default function Dashboard() {
       timestamp: new Date(),
     };
 
-    setMessages((prev) => [...prev, userMsg]);
+    const assistantId = createId();
+    const assistantMsg: Message = {
+      id: assistantId,
+      role: 'assistant',
+      content: '',
+      timestamp: new Date(),
+      isLoading: true,
+    };
+
+    setMessages((prev) => [...prev, userMsg, assistantMsg]);
     setIsTyping(true);
 
     try {
-      const res = await sendMessage(suggestion, currentThreadId);
-      const aiMsg: Message = {
-        id: createId(),
-        role: 'assistant',
-        content: res.response,
-        chart: res.chart,
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, aiMsg]);
-      setCurrentThreadId(res.thread_id);
+      await sendMessageStream(
+        suggestion,
+        currentThreadId,
+        (token) => {
+          setMessages((prev) =>
+            prev.map((message) =>
+              message.id === assistantId
+                ? { ...message, content: `${message.content}${token}` }
+                : message,
+            ),
+          );
+        },
+        (res) => {
+          setMessages((prev) =>
+            prev.map((message) =>
+              message.id === assistantId
+                ? {
+                    ...message,
+                    content: res.response || message.content,
+                    chart: res.chart,
+                    isLoading: false,
+                  }
+                : message,
+            ),
+          );
+          setKnownThreadIds((prev) => new Set([...prev, res.thread_id]));
+          setCurrentThreadId(res.thread_id);
+        },
+      );
     } catch (error) {
-      const errMsg: Message = {
-        id: createId(),
-        role: 'assistant',
-        content: `Error: ${error instanceof Error ? error.message : 'Failed to connect to AI'}`,
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, errMsg]);
+      setMessages((prev) =>
+        prev.map((message) =>
+          message.id === assistantId
+            ? {
+                ...message,
+                content: `Error: ${error instanceof Error ? error.message : 'Failed to connect to AI'}`,
+                isLoading: false,
+              }
+            : message,
+        ),
+      );
     } finally {
       setIsTyping(false);
     }
@@ -405,6 +476,7 @@ export default function Dashboard() {
         isOpen={sidebarOpen}
         onToggle={() => setSidebarOpen((s) => !s)}
         onLogout={handleLogout}
+        onThreadsLoaded={(ids) => setKnownThreadIds(new Set(ids))}
       />
 
       <main className="chat-main">

@@ -2,12 +2,10 @@ import os
 import json
 from dotenv import load_dotenv
 from langchain_core.tools import tool
-from sqlalchemy import create_engine, text, inspect
-from load_data import ensure_csv_tables_loaded
+from sqlalchemy import text, inspect
+from load_data import ensure_csv_tables_loaded, engine
 
 load_dotenv()
-
-engine = create_engine(os.getenv("DATABASE_URL"))
 INTERNAL_TABLE_PREFIXES = ("checkpoint",)
 INTERNAL_TABLE_NAMES = {"charts"}
 

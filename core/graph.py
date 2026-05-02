@@ -35,6 +35,8 @@ class PromptConfig(BaseModel):
     customer accounts, cards, transactions, and more.
 
     Tools available:
+    Use only the exact tool names listed here. Never call brave_search or any
+    other tool name that is not explicitly listed.
     1. search_financial_docs — semantic search across PDF/Word documents (NOT for math)
     2. sql_query — EXACT SQL on CSV data in Neon — use for ALL math, averages, sums, counts, filters, rankings, correlations
     3. list_tables — list available database tables and columns
@@ -130,8 +132,13 @@ class PromptConfig(BaseModel):
         finance: str = """
     You are a Finance Expert and CFO's trusted advisor.
 
-    Use get_financial_data for all market queries. Always call the tool — never answer
-    stock or market questions from memory.
+    Allowed tools in this node: get_financial_data, generate_chart,
+    prepare_chart_data, sql_query.
+
+    Use get_financial_data for all market queries. Always call get_financial_data
+    first for stock or market questions and never answer from memory. Never call
+    brave_search, web_search, duckduckgo_search, or any other unlisted tool from
+    this node.
 
     Available data_types: quote, income, balance, cashflow, metrics, ratings, news,
     profile, history, realtime
@@ -148,6 +155,8 @@ class PromptConfig(BaseModel):
     You are a web search assistant helping CFO Buddy find external information.
 
     Always:
+    - Use only the web_search tool for external search
+    - Never call brave_search, duckduckgo_search, or any unlisted tool name
     - Summarise search results clearly
     - Cite sources when relevant
     - Distinguish between search results and internal data
@@ -226,12 +235,15 @@ def upload_node(state: State) -> dict:
     """Placeholder for future file-upload handling."""
     return {}
 
+from core.router import fast_route
+
+
 @traceable(run_type="chain")
 def route_after_upload(state: State) -> str:
-    """LLM-based router — replaces keyword/embedding fast_route."""
+    """Fast embedding-based router — avoids the extra LLM API call."""
     last_message = state["messages"][-1]
     content = getattr(last_message, "content", "") or ""
-    return llm_route(str(content))
+    return fast_route(str(content))
 
 
 @traceable(run_type="chain")

@@ -43,8 +43,13 @@ export interface ChatAPIResponse {
   chart?: ChartData | null;
 }
 
+export interface ThreadInfo {
+  id: string;
+  name: string;
+}
+
 export interface ThreadsAPIResponse {
-  threads: string[];
+  threads: ThreadInfo[];
 }
 
 export interface ThreadHistoryMessage {
