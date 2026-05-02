@@ -1,11 +1,28 @@
-# CFO Buddy — Your AI-Powered Financial Co-Pilot
-
-> Not just another dashboard. Not just another chatbot.  
-> **CFO Buddy thinks, analyzes, and advises like a real financial expert.**
+<p align="center">
+<img alt="CFO Buddy" src="static/cfobuddy.png" width="128">
+<br>
+<em>An AI-Powered Multi-Agent Orchestration for CFOs - transforming raw financial data into actionable insights through conversational analysis and dynamic charting.</em>
+<br><br>
+<a title="License MIT" target="_blank" href="https://opensource.org/licenses/MIT"><img src="http://img.shields.io/badge/license-MIT-orange.svg?style=flat-square"></a>
+<a title="Python" target="_blank" href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.10+-blue.svg?style=flat-square"></a>
+<a title="Next.js" target="_blank" href="https://nextjs.org/"><img src="https://img.shields.io/badge/Next.js-15+-black.svg?style=flat-square"></a>
+</p>
 
 ---
 
-## What is CFO Buddy?
+## Table of Contents
+
+* [Introduction](#introduction)
+* [Core Features](#core-features)
+* [Graph Structure](#graph-structure)
+* [Agent Workflow](#agent-workflow)
+* [System Architecture](#system-architecture)
+* [Tech Stack](#tech-stack)
+* [Quick Start](#quick-start)
+
+---
+
+## Introduction
 
 CFO Buddy is a **next-generation financial intelligence assistant** that blends the power of LLMs with real-time data, multi-agent reasoning, and a sleek ChatGPT-style interface.
 
