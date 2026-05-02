@@ -1,5 +1,5 @@
 <p align="center">
-<img alt="CFO Buddy" src="static/cfobuddy.png" width="128">
+<img alt="CFO Buddy" src="https://raw.githubusercontent.com/caffeicsatyam/CFOBuddy/main/static/cfobuddy.png" width="128">
 <br>
 <em>An AI-Powered Multi-Agent Orchestration for CFOs - transforming raw financial data into actionable insights through conversational analysis and dynamic charting.</em>
 <br><br>
