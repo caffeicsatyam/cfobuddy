@@ -78,7 +78,7 @@ def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
     return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
 
 
-@lru_cache(maxsize=512)  # Cache routing decisions for repeated queries
+@lru_cache(maxsize=512)
 def route_with_embeddings(query: str) -> str:
     """
     Route query using sentence transformer embeddings.
@@ -219,12 +219,4 @@ def fast_route(query: str) -> str:
     rule_result = route_with_rules(query)
     if rule_result is not None:
         return rule_result
-
-    import time
-    start = time.time()
-    result = route_with_embeddings(query)
-    elapsed = (time.time() - start) * 1000
-    
-    # print(f"FAST_ROUTE: '{query[:50]}...' → {result} ({elapsed:.2f}ms)")
-    
-    return result
+    return route_with_embeddings(query)

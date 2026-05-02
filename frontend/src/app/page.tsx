@@ -77,10 +77,10 @@ export default function Home() {
 
           <div className={styles.grid}>
             {[
-              { title: 'Conversational analysis', icon: '💬', desc: 'Ask questions in plain English. CFOBuddy understands context, interprets financial data, and provides detailed explanations.' },
-              { title: 'Automated charts', icon: '📊', desc: 'Generate beautiful, interactive visualizations from your data — revenue trends, cash flow waterfalls, and more.' },
-              { title: 'Multi-format support', icon: '📁', desc: 'Upload PDF, XLSX, CSV, or DOCX files. CFOBuddy indexes and understands your documents automatically.' },
-              { title: 'Real-time market data', icon: '⚡', desc: 'Get live stock prices, market trends, and financial metrics integrated directly into your analysis.' }
+              { title: 'Conversational analysis', icon: '', desc: 'Ask questions in plain English. CFOBuddy understands context, interprets financial data, and provides detailed explanations.' },
+              { title: 'Automated charts', icon: '', desc: 'Generate beautiful, interactive visualizations from your data — revenue trends, cash flow waterfalls, and more.' },
+              { title: 'Multi-format support', icon: '', desc: 'Upload PDF, XLSX, CSV, or DOCX files. CFOBuddy indexes and understands your documents automatically.' },
+              { title: 'Real-time market data', icon: '', desc: 'Get live stock prices, market trends, and financial metrics integrated directly into your analysis.' }
             ].map((feat, i) => (
               <div key={i} className={styles.featureCard}>
                 <div className={styles.featureIcon}>{feat.icon}</div>

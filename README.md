@@ -1,11 +1,11 @@
-# 🚀 CFO Buddy — Your AI-Powered Financial Co-Pilot
+# CFO Buddy — Your AI-Powered Financial Co-Pilot
 
 > Not just another dashboard. Not just another chatbot.  
 > **CFO Buddy thinks, analyzes, and advises like a real financial expert.**
 
 ---
 
-## 💼 What is CFO Buddy?
+## What is CFO Buddy?
 
 CFO Buddy is a **next-generation financial intelligence assistant** that blends the power of LLMs with real-time data, multi-agent reasoning, and a sleek ChatGPT-style interface.
 
@@ -14,21 +14,21 @@ Simple on the surface — **deeply intelligent underneath.**
 
 ---
 
-## ✨ Core Features
+## Core Features
 
-- 💬 **Conversational Finance** — Ask anything, get expert-level insights  
-- 📁 **Multi-File Intelligence** — CSV, PDF, Excel, Word support  
-- 📈 **Auto Charts** — Plotly-powered visualizations generated on the fly  
-- 🧠 **Agentic Reasoning** — Transparent thinking + decision flow  
-- 🗄️ **Memory System** — Resume conversations anytime  
-- 🔍 **Hybrid Retrieval Engine** — Semantic + keyword search fusion  
-- 🌐 **Live Financial Data** — Powered by yfinance + APIs  
+- **Conversational Finance** — Ask anything, get expert-level insights  
+- **Multi-File Intelligence** — CSV, PDF, Excel, Word support  
+- **Auto Charts** — Plotly-powered visualizations generated on the fly  
+- **Agentic Reasoning** — Transparent thinking + decision flow  
+- **Memory System** — Resume conversations anytime  
+- **Hybrid Retrieval Engine** — Semantic + keyword search fusion  
+- **Live Financial Data** — Powered by yfinance + APIs  
 
 ---
 
 
  
-## 🕸️ Graph Structure
+## Graph Structure
 
 The "brain" of CFO Buddy is a multi-agent state machine built with **LangGraph**. It uses a specialized router to delegate queries to expert agents, each equipped with its own suite of professional tools.
 
@@ -57,7 +57,7 @@ graph TD
     Web -.-> END
 ```
 
-## 🧠 Agent Workflow
+## Agent Workflow
 
 The "brain" of CFO Buddy is a multi-agent orchestration layer. A **Supervisor** node manages a team of specialized experts, deciding who to delegate tasks to and verifying results before responding.
 
@@ -80,7 +80,7 @@ graph TD
     Reflection -->|Answer Ready| End(( ))
 ```
 
-## 🏗️ System Architecture
+## System Architecture
 
 CFO Buddy is built with a modern, high-performance stack designed for scalability and intelligence. It separates the presentation layer, the orchestration "brain," and the data/external tool layers.
 
@@ -106,7 +106,7 @@ graph LR
     end
 ```
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 | Component | Technology |
 |-----------|------------|
@@ -119,7 +119,7 @@ graph LR
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### 1. Backend Setup
 ```bash

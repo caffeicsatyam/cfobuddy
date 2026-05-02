@@ -62,10 +62,10 @@ function resolveChartPreview(message: Message): ChartPreview | null {
 }
 
 const SUGGESTION_CHIPS = [
-  { icon: '📊', label: 'Analyze P&L', prompt: 'Analyze my profit and loss statement and highlight key trends' },
-  { icon: '📈', label: 'Revenue trends', prompt: 'Show me a chart of revenue trends over the last 12 months' },
-  { icon: '💰', label: 'Cash flow health', prompt: 'What is the current state of my cash flow and runway?' },
-  { icon: '⚡', label: 'Quick ratios', prompt: 'Calculate key financial ratios from the uploaded data' },
+  { icon: '', label: 'Analyze P&L', prompt: 'Analyze my profit and loss statement and highlight key trends' },
+  { icon: '', label: 'Revenue trends', prompt: 'Show me a chart of revenue trends over the last 12 months' },
+  { icon: '', label: 'Cash flow health', prompt: 'What is the current state of my cash flow and runway?' },
+  { icon: '', label: 'Quick ratios', prompt: 'Calculate key financial ratios from the uploaded data' },
 ];
 
 export default function ChatArea({ messages, isTyping, onSuggestionClick }: Props) {
@@ -150,7 +150,7 @@ export default function ChatArea({ messages, isTyping, onSuggestionClick }: Prop
                         onClick={() => setActiveChart(chartPreview)}
                       >
                         <div className={styles.chartCardHeader}>
-                          <div className={styles.chartIcon}>📊</div>
+                          <div className={styles.chartIcon}></div>
                           <span className={styles.chartLabel}>{chartPreview.title}</span>
                         </div>
                         {chartPreview.isHtml ? (
