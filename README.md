@@ -6,8 +6,14 @@
 <a title="License MIT" target="_blank" href="https://opensource.org/licenses/MIT"><img src="http://img.shields.io/badge/license-MIT-orange.svg?style=flat-square"></a>
 <a title="Python" target="_blank" href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.10+-blue.svg?style=flat-square"></a>
 <a title="Next.js" target="_blank" href="https://nextjs.org/"><img src="https://img.shields.io/badge/Next.js-15+-black.svg?style=flat-square"></a>
+<a title="FastAPI" target="_blank" href="https://fastapi.tiangolo.com/"><img src="https://img.shields.io/badge/FastAPI-teal.svg?style=flat-square"></a>
+<a title="React" target="_blank" href="https://react.dev/"><img src="https://img.shields.io/badge/React-lightblue.svg?style=flat-square"></a>
+<br>
 <a title="LangChain" target="_blank" href="https://python.langchain.com/"><img src="https://img.shields.io/badge/LangChain-darkgreen.svg?style=flat-square"></a>
 <a title="LlamaIndex" target="_blank" href="https://www.llamaindex.ai/"><img src="https://img.shields.io/badge/LlamaIndex-purple.svg?style=flat-square"></a>
+<a title="PostgreSQL" target="_blank" href="https://www.postgresql.org/"><img src="https://img.shields.io/badge/PostgreSQL-blue.svg?style=flat-square"></a>
+<a title="Neon Serverless Postgres" target="_blank" href="https://neon.tech/"><img src="https://img.shields.io/badge/Neon-green.svg?style=flat-square"></a>
+<a title="Groq" target="_blank" href="https://groq.com/"><img src="https://img.shields.io/badge/Groq-red.svg?style=flat-square"></a>
 </p>
 
 ---
