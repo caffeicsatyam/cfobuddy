@@ -1,5 +1,5 @@
-<p align="center">
 ![alt text](static/cfobuddy.png)
+<p align="center">
 <br>
 <em>An AI-Powered Multi-Agent Orchestration for CFOs - transforming raw financial data into actionable insights through conversational analysis and dynamic charting.</em>
 <br><br>
