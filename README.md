@@ -6,6 +6,8 @@
 <a title="License MIT" target="_blank" href="https://opensource.org/licenses/MIT"><img src="http://img.shields.io/badge/license-MIT-orange.svg?style=flat-square"></a>
 <a title="Python" target="_blank" href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.10+-blue.svg?style=flat-square"></a>
 <a title="Next.js" target="_blank" href="https://nextjs.org/"><img src="https://img.shields.io/badge/Next.js-15+-black.svg?style=flat-square"></a>
+<a title="LangChain" target="_blank" href="https://python.langchain.com/"><img src="https://img.shields.io/badge/LangChain-darkgreen.svg?style=flat-square"></a>
+<a title="LlamaIndex" target="_blank" href="https://www.llamaindex.ai/"><img src="https://img.shields.io/badge/LlamaIndex-purple.svg?style=flat-square"></a>
 </p>
 
 ---
